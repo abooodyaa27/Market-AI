@@ -74,7 +74,6 @@ function download(name,text,type){
 }
 $('exportCsv').addEventListener('click',()=>download('market-ai-signals.csv',J.csv(),'text/csv'));$('exportJson').addEventListener('click',()=>download('market-ai-signals.json',J.json(),'application/json'));
 $('exportAiCsv').addEventListener('click',()=>download('market-ai-missed-opportunities-'+asset+'.csv',AI.missedCsv(asset),'text/csv'));
-$('exportAiJson').addEventListener('click',()=>download('market-ai-missed-opportunities-'+asset+'.json',AI.missedJson(asset),'application/json'));
 $('exportAiTraining').addEventListener('click',()=>download('market-ai-training-snapshot.json',AI.trainingExport(),'application/json'));
 function poll(){const now=Date.now();for(const s of assets){patch(s,now);refreshTick(s);const st=store[s],m1=st.bars.M1||[],lastClosed=m1.filter(b=>!b[5]).at(-1),newBar=!lastClosed||lastClosed[0]<Math.floor(now/60000)*60-60;if(now-st.lastBars>=(newBar?5000:30000))refreshBars(s);}render();}
 setAsset(asset);setTF(tf);poll();setInterval(poll,1000);addEventListener('resize',render);document.addEventListener('visibilitychange',()=>{if(!document.hidden)poll();});
