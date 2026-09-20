@@ -3,7 +3,7 @@ name: Build Market AI V2.2 APK
 on:
   workflow_dispatch:
   pull_request:
-    branches: [ main ]
+    branches: [ main, scalp-m1-m5-m15 ]
   push:
     branches: [ main ]
 
