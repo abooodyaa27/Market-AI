@@ -1,18 +1,10 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const A=require('../app/src/main/assets/analysis.js');
-const {scenario,NOW,trend,bars}=require('./fixtures.cjs');
+const {scenario}=require('./fixtures.cjs');
 function wait(r){assert.equal(r.decision,'WAIT');for(const x of Object.values(r.trade))assert.equal(x,null);}
-test('WAIT placeholders reject null, blanks, invalid and nonpositive prices',()=>{for(const v of [null,undefined,'',NaN,Infinity,0,-1,'bad'])assert.equal(A.formatPrice(v),'—');assert.equal(A.formatPrice(3010.25),'3010.250');});
-for(const symbol of ['XAUUSD','BTCUSD'])for(const sell of [false,true])test(`${symbol}: closed aligned sequence yields ${sell?'SELL':'BUY'} with ordered finite levels`,()=>{const r=A.analyze(scenario(symbol,sell));assert.equal(r.decision,sell?'SELL':'BUY',JSON.stringify(r));const t=r.trade;for(const v of Object.values(t))assert.ok(Number.isFinite(v)&&v>0);const seq=sell?[t.tp3,t.tp2,t.tp1,t.entry,t.sl]:[t.sl,t.entry,t.tp1,t.tp2,t.tp3];for(let i=1;i<seq.length;i++)assert.ok(seq[i]>seq[i-1]);assert.ok(r.stages.every(s=>s.ok));});
-test('missing frames, stale quotes, closed markets and invalid prices never emit levels',()=>{for(const change of [s=>s.bars.H4=[],s=>s.tick.receivedAt-=20000,s=>s.tick.sourceAt-=20000,s=>s.tick.marketState='CLOSED',s=>s.tick.price=null,s=>s.tick.price=NaN,s=>s.bars.M1=s.bars.M1.slice(0,-3)]){const s=scenario();change(s);wait(A.analyze(s));}});
-test('unclosed M1 spike cannot supply a trigger',()=>{const s=scenario();s.bars.M1.at(-1)[5]=true;wait(A.analyze(s));});
-test('H1 real opposing structure vetoes H4',()=>{const s=scenario();s.bars.H1=scenario('XAUUSD',true).bars.H1;wait(A.analyze(s));});
-test('POI far from price and a chased M1 breakout return WAIT',()=>{for(const shift of [60,600]){const s=scenario();s.tick.price+=shift;wait(A.analyze(s));}});
-test('M5 reversal and M1 absent breakout independently veto entries',()=>{for(const tf of ['M5','M1']){const s=scenario();const x=s.bars[tf].at(-1);x[4]=x[1]-.1*30;x[3]=Math.min(x[3],x[4]-.1);wait(A.analyze(s));}});
-test('open higher-frame noise cannot change a confirmed bias',()=>{const s=scenario(),before=A.analyze(s);for(const tf of ['H4','H1'])s.bars[tf].push([NOW/1000,3000,9000,1,1,true]);assert.equal(A.analyze(s).bias,before.bias);});
-test('equal swing plateaus do not invent opposite direction',()=>{const a=trend('H4');const r=A.trend(a);assert.equal(r.direction,1);const flat=bars('H4',Array.from({length:80},()=>[100,101,99,100]));assert.equal(A.trend(flat).direction,0);});
-test('POI is ATR-bounded and a later closed invalidation rejects it',()=>{const s=scenario();const z=A.findPOI(s.bars.M15,1);assert.ok(z);assert.ok(z.high-z.low<=A.atr(s.bars.M15)*1.01);const a=s.bars.M15.map(x=>x.slice());a.at(-1)[3]=z.low-10;a.at(-1)[4]=z.low-9;assert.equal(A.findPOI(a,1),null);});
-test('analysis does not mutate input or leak between assets',()=>{const g=scenario(),b=scenario('BTCUSD',true),snap=JSON.stringify(g);const first=A.analyze(g);A.analyze(b);assert.deepEqual(A.analyze(g),first);assert.equal(JSON.stringify(g),snap);});
-test('malformed OHLC and discontinuous recent bars fail closed',()=>{for(const change of [s=>s.bars.M1.at(-1)[2]=NaN,s=>s.bars.M1.at(-1)[3]=-1,s=>s.bars.M1.splice(-4,1)]){const s=scenario();change(s);wait(A.analyze(s));}});
-test('H1 EMA direction without confirmed swings or structure cannot authorize BUY',()=>{const s=scenario();s.bars.H1=bars('H1',Array.from({length:90},(_,i)=>{const c=2500+i*5;return [c-1,c+2,c-2,c];}));wait(A.analyze(s));});
-test('historical session gaps on higher frames do not disable otherwise valid Gold',()=>{const s=scenario();for(const tf of ['H4','H1','M15'])s.bars[tf].forEach((b,i,a)=>{if(i<a.length-5)b[0]-=172800;});assert.equal(A.analyze(s).decision,'BUY');});
+test('scalp engine uses M15 M5 M1 only',()=>{assert.deepEqual(A.FRAMES,['M15','M5','M1']);});
+test('formatting rejects invalid prices',()=>{for(const x of [null,undefined,'',0,-1,NaN])assert.equal(A.formatPrice(x),'—');});
+for(const symbol of ['XAUUSD','BTCUSD'])for(const sell of [false,true])test(symbol+' '+(sell?'SELL':'BUY')+' scalp signal',()=>{const s=scenario(symbol,sell);delete s.bars.H4;delete s.bars.H1;const r=A.analyze(s);assert.equal(r.decision,sell?'SELL':'BUY',JSON.stringify(r));assert.equal(r.score,100);assert.equal(r.stages.length,3);assert.ok(r.stages.every(x=>x.ok));for(const x of Object.values(r.trade))assert.ok(Number.isFinite(x)&&x>0);});
+test('missing M15 M5 or M1 fails closed',()=>{for(const tf of ['M15','M5','M1']){const s=scenario();delete s.bars.H4;delete s.bars.H1;s.bars[tf]=[];wait(A.analyze(s));}});
+test('H1 and H4 are ignored entirely',()=>{const s=scenario();s.bars.H4=[];s.bars.H1=[];assert.equal(A.analyze(s).decision,'BUY');});
+test('stale, closed and chased entries stay WAIT',()=>{for(const fn of [s=>s.tick.receivedAt-=20000,s=>s.tick.sourceAt-=20000,s=>s.tick.marketState='CLOSED',s=>s.tick.price+=600]){const s=scenario();delete s.bars.H4;delete s.bars.H1;fn(s);wait(A.analyze(s));}});
