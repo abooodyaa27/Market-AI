@@ -1,14 +1,14 @@
-name: Build Market AI Scalp AI V1.9 APK
+name: Build Market AI Scalp AI V2.1 AI Decision APK
 
 on:
   workflow_dispatch:
   pull_request:
-    branches: [ scalp-ai-v1.7-chart-tools ]
+    branches: [ ai-decision-v2.1 ]
   push:
-    branches: [ scalp-ai-v1.7-chart-tools ]
+    branches: [ ai-decision-v2.1 ]
 
 concurrency:
-  group: market-ai-scalp-ai-v19-${{ github.ref }}
+  group: market-ai-scalp-ai-v21-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -48,7 +48,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
-          key: market-ai-scalp-ai-v19-debug-signing-v1
+          key: market-ai-scalp-ai-v21-debug-signing-v1
       - name: Build and lint Android
         run: gradle :app:assembleDebug :app:lintDebug --stacktrace
       - name: Verify APK
