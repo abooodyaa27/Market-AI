@@ -1,4 +1,4 @@
-/* Market AI SCALP V1.1 — M15 context, M5 execution/setup, M1 trigger. No H1/H4. */
+/* Market AI SCALP AI V1.2 — M15 context, M5 execution, M1 trigger + Momentum candidates. */
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.MarketAnalysis=api;})(typeof globalThis==='object'?globalThis:this,function(){
 'use strict';
 const TF={M15:900,M5:300,M1:60},FRAMES=['M15','M5','M1'];
@@ -13,7 +13,7 @@ function trend(a){
  const f=e9.at(-1),s=e21.at(-1),p=a.at(-1)[4],delta=(a.at(-1)[4]-a.at(-8)[4])/v,slope=(f-e9.at(-4))/v;
  let direction=0;if(delta>.035&&slope>.012&&p>=s-.18*v)direction=1;if(delta<-.035&&slope<-.012&&p<=s+.18*v)direction=-1;
  const strength=Math.min(1.5,Math.abs(f-s)/v+Math.abs(delta)*.35+Math.abs(slope)*.25);
- return{direction,strength,atr:v,fast:f,slow:s,label:direction===1?'اتجاه صاعد':direction===-1?'اتجاه هابط':'محايد'};
+ return{direction,strength,atr:v,fast:f,slow:s,delta,slope,label:direction===1?'اتجاه صاعد':direction===-1?'اتجاه هابط':'محايد'};
 }
 function findPOI(a,dir){
  const v=atr(a);if(!positive(v)||!dir)return null;const sw=swings(a),pivots=(dir===1?sw.ls:sw.hs).filter(p=>p.i>=a.length-24);
@@ -22,6 +22,14 @@ function findPOI(a,dir){
 function continuation(a,dir){
  const v=atr(a);if(!positive(v)||a.length<25)return null;const e=ema(a,9).at(-1),last=a.at(-1),recent=a.slice(-6),range=Math.max(...recent.map(b=>b[2]))-Math.min(...recent.map(b=>b[3])),body=(last[4]-last[1])*dir,progress=(last[4]-recent[0][4])*dir;
  if(range<=3*v&&(last[4]-e)*dir>=-.22*v&&body>=.06*v&&progress>=.09*v)return{type:'CONTINUATION',atr:v,low:Math.min(...recent.map(b=>b[3])),high:Math.max(...recent.map(b=>b[2])),time:recent[0][0]};return null;
+}
+function momentum(a,dir){
+ const v=atr(a);if(!positive(v)||a.length<20)return null;
+ const recent=a.slice(-8),last=a.at(-1),prev=recent.slice(0,-1),e9=ema(a,9).at(-1),body=(last[4]-last[1])*dir,range=last[2]-last[3],progress=(last[4]-recent[0][4])*dir;
+ const breakLevel=dir===1?Math.max(...prev.map(b=>b[2])):Math.min(...prev.map(b=>b[3]));
+ const broke=(last[4]-breakLevel)*dir>.08*v,notHuge=range<=2.3*v,trendSide=(last[4]-e9)*dir>0,impulse=body>=.18*v&&progress>=.45*v;
+ if(broke&&notHuge&&trendSide&&impulse)return{type:'MOMENTUM',atr:v,breakLevel,time:last[0],low:Math.min(...recent.map(b=>b[3])),high:Math.max(...recent.map(b=>b[2]))};
+ return null;
 }
 function analyze(input){
  const{bars={},tick={},now=Date.now()}=input||{},result={decision:'WAIT',bias:'MIXED',score:0,opportunity:null,waitCode:'DATA',why:'لا توجد صفقة حالياً.',poi:null,trade:{entry:null,sl:null,tp1:null,tp2:null,tp3:null},stages:FRAMES.map(tf=>({tf,ok:false,score:0,text:'بانتظار البيانات'})),meta:{}};
@@ -38,15 +46,26 @@ function analyze(input){
  const m5=closed.M5,p=tick.price,a5=atr(m5),e5=ema(m5,9).at(-1),b5=m5.at(-1),body5=(b5[4]-b5[1])*dir,progress5=(b5[4]-m5.at(-2)[4])*dir;
  let opp=null,zone=findPOI(m5,dir);
  if(zone){const near=p>=zone.low-.28*zone.atr&&p<=zone.high+.28*zone.atr,touch=m5.slice(-5).some(b=>b[3]<=zone.high+.2*zone.atr&&b[2]>=zone.low-.2*zone.atr);if(near&&touch&&body5>=.05*a5&&progress5>=0){opp='PULLBACK';result.poi=zone;}}
- if(!opp){const cont=continuation(m5,dir),trendContinuation=Math.abs(p-e5)<=1.2*a5&&body5>=.04*a5&&progress5>=0&&(b5[4]-e5)*dir>=-.08*a5;if((cont||trendContinuation)){opp='CONTINUATION';result.poi=cont||{type:'CONTINUATION',atr:a5,low:Math.min(...m5.slice(-6).map(b=>b[3])),high:Math.max(...m5.slice(-6).map(b=>b[2])),time:m5.at(-6)[0]};}}
- result.opportunity=opp;const setup=!!opp&&(b5[2]-b5[3])<=2.2*a5;
- result.stages[1]={tf:'M5',ok:setup,score:setup?40:0,text:setup?(opp+' • Setup مؤكد'):'ننتظر Pullback أو Continuation على M5'};if(!setup)return stop('M5','لا توجد فرصة M5 صالحة الآن.');
- const m1=closed.M1,last=m1.at(-1),previous=m1.slice(-5,-1),a1=atr(m1),level=dir===1?Math.max(...previous.map(b=>b[2])):Math.min(...previous.map(b=>b[3])),trigger=(last[4]-level)*dir>.02*a1&&(last[4]-last[1])*dir>=.08*a1&&(last[2]-last[3])<=2.2*a1,entryOK=(p-level)*dir>0&&Math.abs(p-last[4])<=.45*a1;
- result.stages[2]={tf:'M1',ok:trigger&&entryOK,score:trigger&&entryOK?30:0,text:trigger&&entryOK?'Trigger مؤكد بلا مطاردة':'ننتظر Trigger M1'};if(!result.stages[2].ok)return stop('M1','تأكيد M1 غير مكتمل أو السعر ابتعد عن الدخول.');
+ if(!opp){const cont=continuation(m5,dir),trendContinuation=Math.abs(p-e5)<=1.2*a5&&body5>=.04*a5&&progress5>=0&&(b5[4]-e5)*dir>=-.08*a5;if(cont||trendContinuation){opp='CONTINUATION';result.poi=cont||{type:'CONTINUATION',atr:a5,low:Math.min(...m5.slice(-6).map(b=>b[3])),high:Math.max(...m5.slice(-6).map(b=>b[2])),time:m5.at(-6)[0]};}}
+ if(!opp){const mom=momentum(m5,dir);if(mom){opp='MOMENTUM';result.poi=mom;}}
+ result.opportunity=opp;const setup=!!opp&&(b5[2]-b5[3])<=2.3*a5;
+ result.stages[1]={tf:'M5',ok:setup,score:setup?40:0,text:setup?(opp+' • Setup مؤكد'):'ننتظر Pullback أو Continuation أو Momentum على M5'};if(!setup)return stop('M5','لا توجد فرصة M5 صالحة الآن.');
+ const m1=closed.M1,last=m1.at(-1),previous=m1.slice(-5,-1),a1=atr(m1),level=dir===1?Math.max(...previous.map(b=>b[2])):Math.min(...previous.map(b=>b[3]));
+ let trigger=(last[4]-level)*dir>.02*a1&&(last[4]-last[1])*dir>=.08*a1&&(last[2]-last[3])<=2.2*a1,entryOK=(p-level)*dir>0&&Math.abs(p-last[4])<=.45*a1;
+ if(opp==='MOMENTUM'){
+   const prior=m1.slice(-7,-1),microExtreme=dir===1?Math.min(...prior.map(b=>b[3])):Math.max(...prior.map(b=>b[2])),pullbackDepth=Math.abs(microExtreme-level);
+   const hadMicroPullback=pullbackDepth>=.18*a1;
+   trigger=hadMicroPullback&&(last[4]-level)*dir>.015*a1&&(last[4]-last[1])*dir>=.06*a1;
+   entryOK=(p-level)*dir>0&&Math.abs(p-last[4])<=.35*a1;
+ }
+ result.stages[2]={tf:'M1',ok:trigger&&entryOK,score:trigger&&entryOK?30:0,text:trigger&&entryOK?'Trigger مؤكد بلا مطاردة':opp==='MOMENTUM'?'ننتظر micro-pullback ثم إعادة كسر على M1':'ننتظر Trigger M1'};if(!result.stages[2].ok)return stop('M1','تأكيد M1 غير مكتمل أو السعر ابتعد عن الدخول.');
  result.score=result.stages.reduce((s,x)=>s+x.score,0);if(result.score<70)return stop('SCORE','جودة الإشارة أقل من الحد المطلوب.');
  const recent=m1.slice(-5),extreme=dir===1?Math.min(...recent.map(b=>b[3])):Math.max(...recent.map(b=>b[2])),sl=extreme-dir*.15*a1,risk=(p-sl)*dir;if(!positive(risk)||risk<.35*a1||risk>2.2*a1)return stop('RISK','مسافة الوقف غير مناسبة لسكالب سريع.');
  const trade={entry:p,sl,tp1:p+dir*risk*.75,tp2:p+dir*risk*1.25,tp3:p+dir*risk*1.8};if(!Object.values(trade).every(positive))return stop('RISK','تعذر حساب مستويات صالحة.');
- result.trade=trade;result.decision=dir===1?'BUY':'SELL';result.waitCode=null;result.meta={atr:a1,m15:m15.label,m5:m5t.label,m1:'CONFIRMED'};result.why='SCALP '+opp+' • M15 سياق، M5 تنفيذ، M1 Trigger • '+result.score+'/100.';return result;
+ const stretch=Math.abs(p-e5)/a5;
+ result.trade=trade;result.decision=dir===1?'BUY':'SELL';result.waitCode=null;
+ result.meta={atr:a1,m15:m15.label,m5:m5t.label,m1:'CONFIRMED',m15Strength:m15.strength,m5Strength:m5t.strength,stretch,side:dir===1?'BUY':'SELL',setup:opp,aiFeatures:{m15Align:m15.direction===dir?1:m15.direction===0?0:-1,m15Strength:m15.strength,m5Strength:m5t.strength,stretch,score:result.score/100,isPullback:opp==='PULLBACK'?1:0,isContinuation:opp==='CONTINUATION'?1:0,isMomentum:opp==='MOMENTUM'?1:0,isBTC:input?.symbol==='BTCUSD'?1:0}};
+ result.why='SCALP '+opp+' • M15 سياق، M5 تنفيذ، M1 Trigger • '+result.score+'/100.';return result;
 }
-return{TF,FRAMES,formatPrice,validBar,atr,ema,swings,trend,findPOI,continuation,analyze};
+return{TF,FRAMES,formatPrice,validBar,atr,ema,swings,trend,findPOI,continuation,momentum,analyze};
 });
