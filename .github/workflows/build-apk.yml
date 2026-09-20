@@ -53,24 +53,24 @@ jobs:
         run: gradle :app:assembleDebug :app:lintDebug --stacktrace
       - name: Verify APK
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk Market_AI_SCALP_AI_V1_9.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Market_AI_SCALP_AI_V1_9.apk
-          sha256sum Market_AI_SCALP_AI_V1_9.apk > Market_AI_SCALP_AI_V1_9.apk.sha256
+          cp app/build/outputs/apk/debug/app-debug.apk Market_AI_SCALP_AI_V2_1_AI_Decision.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Market_AI_SCALP_AI_V2_1_AI_Decision.apk
+          sha256sum Market_AI_SCALP_AI_V2_1_AI_Decision.apk > Market_AI_SCALP_AI_V2_1_AI_Decision.apk.sha256
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Market_AI_SCALP_AI_V1_9.apk
-          path: Market_AI_SCALP_AI_V1_9.apk
+          name: Market_AI_SCALP_AI_V2_1_AI_Decision.apk
+          path: Market_AI_SCALP_AI_V2_1_AI_Decision.apk
           if-no-files-found: error
           retention-days: 90
       - name: Upload validation reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SCALP_AI_V1_9-validation
+          name: SCALP_AI_V2_1-validation
           path: |
             test-results/
             app/build/reports/lint-results-debug.html
-            Market_AI_SCALP_AI_V1_9.apk.sha256
+            Market_AI_SCALP_AI_V2_1_AI_Decision.apk.sha256
           if-no-files-found: ignore
           retention-days: 30
