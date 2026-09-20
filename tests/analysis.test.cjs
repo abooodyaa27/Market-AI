@@ -2,7 +2,7 @@ const test=require('node:test'),assert=require('node:assert/strict');
 const A=require('../app/src/main/assets/analysis.js');
 const {scenario,bars}=require('./fixtures.cjs');
 function wait(r){assert.equal(r.decision,'WAIT');for(const x of Object.values(r.trade))assert.equal(x,null);}
-test('scalp AI V1.3 uses M15 M5 M1 only',()=>{assert.deepEqual(A.FRAMES,['M15','M5','M1']);});
+test('scalp AI V1.4 uses M15 M5 M1 only',()=>{assert.deepEqual(A.FRAMES,['M15','M5','M1']);});
 test('formatting rejects invalid prices',()=>{for(const x of [null,undefined,'',0,-1,NaN])assert.equal(A.formatPrice(x),'—');});
 for(const symbol of ['XAUUSD','BTCUSD'])for(const sell of [false,true])test(symbol+' '+(sell?'SELL':'BUY')+' scalp signal',()=>{const s=scenario(symbol,sell);delete s.bars.H4;delete s.bars.H1;const r=A.analyze(s);assert.equal(r.decision,sell?'SELL':'BUY',JSON.stringify(r));assert.ok(r.score>=70);assert.equal(r.stages.length,3);assert.ok(r.stages[1].ok&&r.stages[2].ok);for(const x of Object.values(r.trade))assert.ok(Number.isFinite(x)&&x>0);});
 test('H1 and H4 are ignored entirely',()=>{const s=scenario();s.bars.H4=[];s.bars.H1=[];assert.equal(A.analyze(s).decision,'BUY');});
@@ -23,4 +23,17 @@ test('valid candidate exposes broad market-state AI features',()=>{
  assert.equal(r.decision,'BUY',JSON.stringify(r));
  const f=r.meta.aiFeatures;
  for(const k of ['vol1','vol5','body1','body5','compression5','distanceEma','trendAge5','entryDistance']) assert.ok(Number.isFinite(f[k]),k);
+});
+test('multi-strategy detector exports broad opportunity families',()=>{
+ for(const fn of ['breakout','breakoutRetest','fakeBreak','liquiditySweep','rangeRejection','detectStrategies']) assert.equal(typeof A[fn],'function',fn);
+});
+test('valid signal includes human-readable entry basis',()=>{
+ const s=scenario();delete s.bars.H4;delete s.bars.H1;const r=A.analyze(s);
+ assert.equal(r.decision,'BUY',JSON.stringify(r));
+ assert.ok(Array.isArray(r.meta.entryBasis));
+ assert.ok(r.meta.entryBasis.length>=2);
+});
+test('AI features include expanded strategy flags',()=>{
+ const s=scenario();delete s.bars.H4;delete s.bars.H1;const r=A.analyze(s),f=r.meta.aiFeatures;
+ for(const k of ['isBreakout','isBreakoutRetest','isFakeBreak','isLiquiditySweep','isRangeRejection']) assert.ok(k in f,k);
 });
