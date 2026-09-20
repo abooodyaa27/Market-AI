@@ -1,6 +1,6 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.MarketData=api;})(typeof globalThis==='object'?globalThis:this,function(){
 'use strict';
-const TF={H4:14400,H1:3600,M15:900,M5:300,M1:60};
+const TF={H4:14400,H1:3600,M15:900,M5:300,M3:180,M1:60};
 const number=v=>v===null||v===undefined||typeof v==='boolean'||String(v).trim()===''?NaN:Number(v);
 const positive=v=>Number.isFinite(v)&&v>0;
 function timestamp(v){if(v===null||v===undefined||v==='')return null;let n=Number(v);if(Number.isFinite(n))return n<1e11?n*1000:n;const t=Date.parse(v);return Number.isFinite(t)?t:NaN;}
@@ -17,5 +17,6 @@ function patchLive(a,p,now,tf){if(!positive(p)||!Number.isFinite(now)||!TF[tf]||
  else out.push([bucket,p,p,p,p,true]);
  return out.slice(-160);
 }
-return {TF,normalizeTick,normalizeBars,patchLive};
+function aggregate(a,seconds){if(!Array.isArray(a)||!a.length||!Number.isFinite(seconds)||seconds<60)return [];const groups=new Map();for(const b of a){if(!Array.isArray(b)||b.length<5)continue;const t=Math.floor(b[0]/seconds)*seconds;let g=groups.get(t);if(!g){g=[t,b[1],b[2],b[3],b[4],!!b[5]];groups.set(t,g);}else{g[2]=Math.max(g[2],b[2]);g[3]=Math.min(g[3],b[3]);g[4]=b[4];g[5]=g[5]||!!b[5];}}return Array.from(groups.values()).sort((x,y)=>x[0]-y[0]).slice(-160);}
+return {TF,normalizeTick,normalizeBars,patchLive,aggregate};
 });
