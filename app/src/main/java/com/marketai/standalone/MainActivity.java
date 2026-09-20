@@ -1,8 +1,14 @@
 package com.marketai.standalone;
 
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.os.Bundle;
 import android.os.Build;
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.webkit.WebResourceRequest;
 import android.webkit.JavascriptInterface;
 import android.view.WindowInsets;
@@ -24,10 +30,14 @@ public class MainActivity extends Activity {
     private String pendingText;
     private String pendingMime;
     private static final int EXPORT_REQUEST = 4107;
+    private static final int NOTIFICATION_PERMISSION_REQUEST = 4108;
+    private static final String SIGNAL_CHANNEL = "market_ai_signals";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        createSignalChannel();
+        requestNotificationPermission();
 
         web = new WebView(this);
         web.setBackgroundColor(Color.rgb(8, 12, 17));
@@ -45,6 +55,7 @@ public class MainActivity extends Activity {
         s.setLoadWithOverviewMode(true);
 
         web.addJavascriptInterface(new ExportBridge(), "AndroidExport");
+        web.addJavascriptInterface(new NotifyBridge(), "AndroidNotify");
         web.setWebChromeClient(new WebChromeClient());
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -68,6 +79,65 @@ public class MainActivity extends Activity {
 
         web.loadUrl("file:///android_asset/index.html");
         setContentView(container);
+    }
+
+    private void createSignalChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel channel = new NotificationChannel(
+                    SIGNAL_CHANNEL,
+                    "Market AI Signals",
+                    NotificationManager.IMPORTANCE_HIGH);
+            channel.setDescription("BUY / SELL signal alerts from Market AI Scalp");
+            channel.enableVibration(true);
+            NotificationManager nm = getSystemService(NotificationManager.class);
+            if (nm != null) nm.createNotificationChannel(channel);
+        }
+    }
+
+    private void requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_PERMISSION_REQUEST);
+        }
+    }
+
+    private class NotifyBridge {
+        @JavascriptInterface
+        public void signal(String title, String body, String key) {
+            runOnUiThread(() -> postSignalNotification(title, body, key));
+        }
+    }
+
+    private void postSignalNotification(String title, String body, String key) {
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+        Intent open = new Intent(this, MainActivity.class);
+        open.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        PendingIntent pi = PendingIntent.getActivity(
+                this,
+                0,
+                open,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
+        Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? new Notification.Builder(this, SIGNAL_CHANNEL)
+                : new Notification.Builder(this);
+        builder.setSmallIcon(R.mipmap.ic_launcher)
+                .setContentTitle(title == null ? "Market AI Signal" : title)
+                .setContentText(body == null ? "" : body.replace("\n", " • "))
+                .setStyle(new Notification.BigTextStyle().bigText(body == null ? "" : body))
+                .setAutoCancel(true)
+                .setContentIntent(pi)
+                .setPriority(Notification.PRIORITY_HIGH)
+                .setCategory(Notification.CATEGORY_RECOMMENDATION);
+
+        NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        if (nm != null) {
+            int id = (key == null ? (int)(System.currentTimeMillis() & 0x7fffffff) : Math.abs(key.hashCode()));
+            nm.notify(id, builder.build());
+        }
     }
 
     private class ExportBridge {
@@ -111,14 +181,15 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
-        if (web != null) { web.onPause(); web.pauseTimers(); }
+        // Keep the WebView polling while the app remains alive in the background,
+        // so signal notifications can still be produced.
         super.onPause();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        if (web != null) { web.onResume(); web.resumeTimers(); }
+        if (web != null) web.resumeTimers();
     }
 
     @Override
@@ -131,6 +202,7 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         if (web != null) {
             web.removeJavascriptInterface("AndroidExport");
+            web.removeJavascriptInterface("AndroidNotify");
             web.destroy();
             web = null;
         }
