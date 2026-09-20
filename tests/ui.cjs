@@ -13,7 +13,8 @@ const {scenario,NOW}=require('./fixtures.cjs');
   await context.route('https://biquote.io/api/**',async route=>{const u=new URL(route.request().url()),parts=u.pathname.split('/'),symbol=parts[2],s=scenario(symbol,symbol==='BTCUSD');if(!parts[3]){const spread=symbol==='XAUUSD'?.08:2;return route.fulfill({json:{bid:s.tick.price-spread/2,ask:s.tick.price+spread/2,mid:s.tick.price,timestamp:NOW,marketState:'OPEN'}});}const tf={'1m':'M1','5m':'M5','15m':'M15','1h':'M15','4h':'M15'}[u.searchParams.get('interval')];await route.fulfill({json:{bars:s.bars[tf].map(([t,o,h,l,c,isOpen])=>({openTime:new Date(t*1000).toISOString(),open:o,high:h,low:l,close:c,isOpen}))}});});
   const page=await context.newPage();page.on('pageerror',e=>failures.push(e.message));
   await page.goto('http://127.0.0.1:'+server.address().port);
-  await page.waitForFunction(()=>document.getElementById('feed').textContent==='LIVE',{timeout:30000});
+  await page.waitForFunction(()=>document.getElementById('journalStatus').textContent.includes('السجل متاح'),{timeout:30000});
+  await page.waitForFunction(()=>document.getElementById('decision').textContent==='WAIT',{timeout:30000});
   // V2.1 is deliberately fail-closed: with no validated model, cold start MUST be WAIT.
   assert.equal(await page.locator('#decision').innerText(),'WAIT');
   assert.equal(await page.locator('#aiMode').innerText(),'COLLECTING');
@@ -21,6 +22,8 @@ const {scenario,NOW}=require('./fixtures.cjs');
   for(const name of ['M1','M3','M5','M15','H1','H4'])assert.equal(await page.getByRole('button',{name,exact:true}).count(),1);
   for(const id of ['stTp2','chartNow','missedHistory','toolTrend','toolRay','toolEma','toolRsi','exportAiCsv','exportDecisions','trainModel','decisionHistory'])assert.equal(await page.locator('#'+id).count(),1);
   assert.match(await page.locator('#journalStatus').innerText(),/السجل متاح/);
+  // The fixture deliberately reuses M15 for H1/H4; V2.1 correctly rejects misaligned higher-TF bars rather than pretending the feed is LIVE.
+  assert.match(await page.locator('#feed').innerText(),/UNSAFE|CONNECTING/);
   await page.locator('#btcTab').click();await page.waitForFunction(()=>document.getElementById('symbol').textContent==='BTCUSD');
   assert.equal(await page.locator('#decision').innerText(),'WAIT');
   for(const width of [320,390,430]){await page.setViewportSize({width,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}
