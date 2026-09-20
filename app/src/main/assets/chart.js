@@ -1,15 +1,22 @@
 'use strict';
-window.MarketChart=(()=>{let geometry=null;const fmt=window.MarketAnalysis.formatPrice;
-function draw(cv,a,tf){const r=cv.getBoundingClientRect(),W=Math.max(1,Math.floor(r.width)),H=Math.max(1,Math.floor(r.height)),dpr=Math.min(3,devicePixelRatio||1);if(cv.width!==W*dpr||cv.height!==H*dpr){cv.width=W*dpr;cv.height=H*dpr;}const c=cv.getContext('2d');if(!c)return 0;c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);c.fillStyle='#0c131b';c.fillRect(0,0,W,H);c.direction='ltr';geometry=null;
+window.MarketChart=(()=>{let geometry=null,offset=0,cross=null,drag=null,lastArgs=null;const fmt=window.MarketAnalysis.formatPrice;
+function draw(cv,a,tf){lastArgs={cv,a,tf};const r=cv.getBoundingClientRect(),W=Math.max(1,Math.floor(r.width)),H=Math.max(1,Math.floor(r.height)),dpr=Math.min(3,devicePixelRatio||1);if(cv.width!==W*dpr||cv.height!==H*dpr){cv.width=W*dpr;cv.height=H*dpr;}const c=cv.getContext('2d');if(!c)return 0;c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);c.fillStyle='#0c131b';c.fillRect(0,0,W,H);c.direction='ltr';geometry=null;
  if(a.length<2){c.fillStyle='#a4b2c1';c.font='14px sans-serif';c.textAlign='center';c.fillText('بانتظار بيانات '+tf,W/2,H/2);return 0;}
- const desired={H4:24,H1:30,M15:40,M5:48,M1:55},count=Math.max(12,Math.min(desired[tf]||40,Math.floor((W-85)/6))),data=a.slice(-count);
+ const desired={M15:40,M5:48,M1:55},count=Math.max(14,Math.min(desired[tf]||40,Math.floor((W-85)/6))),maxOffset=Math.max(0,a.length-count);offset=Math.max(0,Math.min(offset,maxOffset));const end=a.length-offset,start=Math.max(0,end-count),data=a.slice(start,end);
  let mn=Math.min(...data.map(b=>b[3])),mx=Math.max(...data.map(b=>b[2]));if(!Number.isFinite(mn)||!Number.isFinite(mx))return 0;const pad=(mx-mn)*.10||Math.max(mx*.001,1);mn-=pad;mx+=pad;
  c.font='11px sans-serif';const R=Math.min(W*.35,Math.max(72,c.measureText(fmt(mx)).width+14)),L=9,T=48,B=53,pw=W-L-R,ph=H-T-B,step=pw/data.length,y=p=>T+(mx-p)/(mx-mn)*ph;
  for(let i=0;i<=5;i++){const yy=T+i*ph/5;c.strokeStyle='#23303d';c.beginPath();c.moveTo(L,yy);c.lineTo(L+pw,yy);c.stroke();c.fillStyle='#a4b2c1';c.textAlign='left';c.textBaseline='middle';c.fillText(fmt(mx-i*(mx-mn)/5),L+pw+6,yy);}
  const bw=Math.max(3,Math.min(12,step*.7));data.forEach((b,i)=>{const x=L+(i+.5)*step;c.fillStyle=c.strokeStyle=b[4]>=b[1]?'#2bd486':'#ff6975';c.beginPath();c.moveTo(x,y(b[2]));c.lineTo(x,y(b[3]));c.stroke();c.fillRect(x-bw/2,Math.min(y(b[1]),y(b[4])),bw,Math.max(1.5,Math.abs(y(b[4])-y(b[1]))));});
  const price=data[data.length-1][4],cy=y(price);c.strokeStyle='#ddb75f';c.setLineDash([4,4]);c.beginPath();c.moveTo(L,cy);c.lineTo(L+pw,cy);c.stroke();c.setLineDash([]);c.fillStyle='#ddb75f';c.fillRect(L+pw+2,cy-9,R-3,18);c.fillStyle='#080c11';c.font='bold 11px sans-serif';c.textAlign='left';c.fillText(fmt(price),L+pw+6,cy);
  const marks=[0,Math.floor((data.length-1)/2),data.length-1];c.fillStyle='#a4b2c1';c.font='10px sans-serif';c.textBaseline='top';marks.forEach((i,k)=>{const dt=new Date(data[i][0]*1000),x=L+(i+.5)*step;c.textAlign=k===0?'left':k===2?'right':'center';c.fillText(dt.toLocaleDateString('en-GB',{day:'2-digit',month:'short'}),x,H-B+10);c.fillText(dt.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false}),x,H-B+25);});
- geometry={data,left:r.left+L,step};return data.length;
+ if(cross){const i=Math.max(0,Math.min(data.length-1,cross.index)),b=data[i],x=L+(i+.5)*step,yy=Math.max(T,Math.min(T+ph,cross.y));c.strokeStyle='rgba(238,244,250,.72)';c.setLineDash([3,3]);c.beginPath();c.moveTo(x,T);c.lineTo(x,T+ph);c.moveTo(L,yy);c.lineTo(L+pw,yy);c.stroke();c.setLineDash([]);c.fillStyle='rgba(8,12,17,.92)';c.fillRect(L,6,Math.min(W-18,330),30);c.fillStyle='#eef4fa';c.font='10px sans-serif';c.textAlign='left';c.textBaseline='middle';const vol=b[6]??'—';c.fillText('O '+fmt(b[1])+'  H '+fmt(b[2])+'  L '+fmt(b[3])+'  C '+fmt(b[4])+'  V '+vol,L+6,21);}
+ geometry={data,left:r.left+L,top:r.top+T,step,pw,ph,maxOffset};return data.length;
 }
+function redraw(){if(lastArgs)draw(lastArgs.cv,lastArgs.a,lastArgs.tf);}
+function begin(clientX,clientY){if(!geometry)return null;drag={x:clientX,y:clientY,startOffset:offset,moved:false};const i=Math.max(0,Math.min(geometry.data.length-1,Math.floor((clientX-geometry.left)/geometry.step)));cross={index:i,y:clientY-geometry.top};redraw();return geometry.data[i];}
+function move(clientX,clientY){if(!geometry||!drag)return null;const dx=clientX-drag.x;if(Math.abs(dx)>8){drag.moved=true;offset=Math.max(0,Math.min(geometry.maxOffset,drag.startOffset+Math.round(-dx/geometry.step)));cross=null;}else{const i=Math.max(0,Math.min(geometry.data.length-1,Math.floor((clientX-geometry.left)/geometry.step)));cross={index:i,y:clientY-geometry.top};}redraw();if(!cross||!geometry)return null;return geometry.data[cross.index];}
+function end(){drag=null;}
+function reset(){offset=0;cross=null;drag=null;redraw();}
 function pick(clientX){if(!geometry)return null;const i=Math.max(0,Math.min(geometry.data.length-1,Math.floor((clientX-geometry.left)/geometry.step)));return geometry.data[i];}
-return {draw,pick};})();
+function state(){return{offset,cross:!!cross};}
+return {draw,pick,begin,move,end,reset,state};})();
