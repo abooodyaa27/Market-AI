@@ -86,7 +86,7 @@ function analyze(input){
  const stretch=Math.abs(p-e5)/a5,env=marketFeatures(m15,m5,m1,dir,p,e5,a5,a1);
  result.trade=trade;result.decision=dir===1?'BUY':'SELL';result.waitCode=null;
  result.meta={atr:a1,m15:m15.label,m5:m5t.label,m1:'CONFIRMED',m15Strength:m15.strength,m5Strength:m5t.strength,stretch,side:dir===1?'BUY':'SELL',setup:result.opportunity,aiFeatures:{m15Align:m15.direction===dir?1:m15.direction===0?0:-1,m15Strength:m15.strength,m5Strength:m5t.strength,stretch,score:result.score/100,isPullback:result.opportunity==='PULLBACK'?1:0,isContinuation:result.opportunity==='CONTINUATION'?1:0,isMomentum:result.opportunity==='MOMENTUM'?1:0,isReentry:result.opportunity==='REENTRY'?1:0,isBTC:input?.symbol==='BTCUSD'?1:0,vol1:env.vol1,vol5:env.vol5,body1:env.body1,body5:env.body5,compression5:env.compression5,distanceEma:env.distanceEma,trendAge5:env.trendAge5,entryDistance}};
- result.why='SCALP '+opp+' • M15 سياق، M5 تنفيذ، M1 Trigger • '+result.score+'/100.';return result;
+ result.why='SCALP '+result.opportunity+' • M15 سياق، M5 تنفيذ، M1 Trigger • '+result.score+'/100.';return result;
 }
 return{TF,FRAMES,formatPrice,validBar,atr,ema,swings,trend,findPOI,continuation,momentum,marketFeatures,analyze};
 });
