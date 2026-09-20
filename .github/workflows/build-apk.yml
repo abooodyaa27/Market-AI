@@ -1,14 +1,14 @@
-name: Build Market AI Scalp V1.1 APK
+name: Build Market AI Scalp V1.1.1 APK
 
 on:
   workflow_dispatch:
   pull_request:
-    branches: [ scalp-v1.1 ]
+    branches: [ scalp-v1.1.1 ]
   push:
-    branches: [ scalp-v1.1 ]
+    branches: [ scalp-v1.1.1 ]
 
 concurrency:
-  group: market-ai-scalp-v11-${{ github.ref }}
+  group: market-ai-scalp-v111-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -48,29 +48,29 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
-          key: market-ai-scalp-v11-debug-signing-v1
+          key: market-ai-scalp-v111-debug-signing-v1
       - name: Build and lint Android
         run: gradle :app:assembleDebug :app:lintDebug --stacktrace
       - name: Verify APK
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk Market_AI_SCALP_V1_1.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Market_AI_SCALP_V1_1.apk
-          sha256sum Market_AI_SCALP_V1_1.apk > Market_AI_SCALP_V1_1.apk.sha256
+          cp app/build/outputs/apk/debug/app-debug.apk Market_AI_SCALP_V1_1_1.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Market_AI_SCALP_V1_1_1.apk
+          sha256sum Market_AI_SCALP_V1_1_1.apk > Market_AI_SCALP_V1_1_1.apk.sha256
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Market_AI_SCALP_V1_1.apk
-          path: Market_AI_SCALP_V1_1.apk
+          name: Market_AI_SCALP_V1_1_1.apk
+          path: Market_AI_SCALP_V1_1_1.apk
           if-no-files-found: error
           retention-days: 90
       - name: Upload validation reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SCALP_V1_1-validation
+          name: SCALP_V1_1_1-validation
           path: |
             test-results/
             app/build/reports/lint-results-debug.html
-            Market_AI_SCALP_V1_1.apk.sha256
+            Market_AI_SCALP_V1_1_1.apk.sha256
           if-no-files-found: ignore
           retention-days: 30
