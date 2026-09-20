@@ -20,7 +20,7 @@ function renderHistory(){const filter=x=>x.symbol===asset,st=J.stats(filter),row
 function nextStep(code){return({DATA:'انتظار بيانات مكتملة',STALE:'انتظار سعر حديث',CLOSED:'السوق مغلق',M5_TREND:'انتظار اتجاه M5 واضح',M15_CONFLICT:'M15 قوي بعكس M5',M5:'انتظار فرصة M5',M1:'انتظار Trigger على M1',REENTRY:'فات الدخول الأول؛ ننتظر Re-entry مضبوط',SCORE:'جودة الإشارة أقل من الحد',RISK:'إدارة المخاطر غير مناسبة',AI_REJECT:'AI رفض المرشح الحالي'})[code]||'مراقبة السوق';}
 function maybeLog(symbol,an){
  if(!['BUY','SELL'].includes(an.decision))return;
- const st=store[symbol],key=[an.decision,an.opportunity,an.score,Math.round(an.trade.entry*100)].join('|');
+ const st=store[symbol],key=[symbol,an.decision,an.opportunity,an.meta?.signalBar||0].join('|');
  if(st.lastSignalKey===key)return;
  J.add(symbol,an,Date.now());st.lastSignalKey=key;
  const title=(symbol==='XAUUSD'?'Gold':'Bitcoin')+' • '+an.decision+' • '+an.opportunity;
