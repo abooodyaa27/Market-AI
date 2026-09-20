@@ -11,7 +11,7 @@ function swings(a){const hs=[],ls=[];for(let i=2;i<a.length-2;i++){const b=a[i],
 function trend(a){
  const v=atr(a),e9=ema(a,9),e21=ema(a,21);if(!positive(v)||!e9.length||!e21.length)return{direction:0,strength:0,label:'بيانات غير كافية'};
  const f=e9.at(-1),s=e21.at(-1),p=a.at(-1)[4],delta=(a.at(-1)[4]-a.at(-8)[4])/v,slope=(f-e9.at(-4))/v;
- let direction=0;if(f>s+.03*v&&delta>.08&&slope>.02)direction=1;if(f<s-.03*v&&delta<-.08&&slope<-.02)direction=-1;
+ let direction=0;if(delta>.04&&slope>.015&&p>=s-.15*v)direction=1;if(delta<-.04&&slope<-.015&&p<=s+.15*v)direction=-1;
  const strength=Math.min(1.5,Math.abs(f-s)/v+Math.abs(delta)*.35+Math.abs(slope)*.25);
  return{direction,strength,atr:v,fast:f,slow:s,label:direction===1?'اتجاه صاعد':direction===-1?'اتجاه هابط':'محايد'};
 }
