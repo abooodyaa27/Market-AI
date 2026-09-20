@@ -19,7 +19,7 @@ const {scenario,NOW}=require('./fixtures.cjs');
   assert.equal(await page.getByRole('button',{name:'M5',exact:true}).count(),1);
   assert.equal(await page.getByRole('button',{name:'M1',exact:true}).count(),1);
   assert.equal(await page.getByRole('button',{name:'H1',exact:true}).count(),0);
-  assert.equal(await page.getByRole('button',{name:'H4',exact:true}).count(),0);assert.equal(await page.locator('#stTp2').count(),1);
+  assert.equal(await page.getByRole('button',{name:'H4',exact:true}).count(),0);assert.equal(await page.locator('#stTp2').count(),1);assert.equal(await page.locator('#chartNow').count(),1);assert.equal(await page.locator('#missedHistory').count(),1);
   await page.locator('#btcTab').click();await page.waitForFunction(()=>document.getElementById('decision').textContent==='SELL');
   for(const width of [320,390,430]){await page.setViewportSize({width,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}
   fs.mkdirSync('test-results',{recursive:true});await page.screenshot({path:'test-results/scalp-mobile.png',fullPage:true});
