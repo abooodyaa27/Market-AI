@@ -1,4 +1,4 @@
-/* Market AI V2.1 deterministic multi-timeframe analysis. Closed candles only. */
+/* Market AI V2.2 deterministic multi-timeframe analysis. Closed candles only. */
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.MarketAnalysis=api;})(typeof globalThis==='object'?globalThis:this,function(){
 'use strict';
 const TF={H4:14400,H1:3600,M15:900,M5:300,M1:60},FRAMES=Object.keys(TF);
@@ -27,30 +27,30 @@ function continuation(a,dir){
  if(compressed&&holds&&impulse)return{type:'CONTINUATION',atr:v,low:Math.min(...recent.map(b=>b[3])),high:Math.max(...recent.map(b=>b[2])),time:recent[0][0]};return null;
 }
 function analyze(input){
- const{bars={},tick={},now=Date.now()}=input||{};const result={decision:'WAIT',bias:'MIXED',score:0,opportunity:null,why:'لا توجد صفقة حالياً.',poi:null,trade:{entry:null,sl:null,tp1:null,tp2:null,tp3:null},stages:FRAMES.map(tf=>({tf,ok:false,score:0,text:'بانتظار البيانات'})),meta:{}};
- const stop=m=>{result.why='لا توجد صفقة حالياً. '+m;return result;};
- if(!positive(tick.price)||!Number.isFinite(tick.receivedAt)||now-tick.receivedAt>5000||tick.receivedAt>now+5000)return stop('الأسعار غير متاحة أو غير حديثة.');
- if(tick.sourceAt!==null&&tick.sourceAt!==undefined&&(!Number.isFinite(tick.sourceAt)||now-tick.sourceAt>10000||tick.sourceAt>now+5000))return stop('وقت سعر المصدر غير حديث.');
- if(tick.marketState&&!['OPEN','TRADING','ACTIVE'].includes(String(tick.marketState).toUpperCase()))return stop('السوق مغلق أو حالته غير مؤكدة.');
- const closed={};for(const tf of FRAMES){const a=bars[tf];if(!Array.isArray(a)||a.length<55||a.some((b,i)=>!validBar(b)||(i>0&&b[0]<=a[i-1][0])))return stop('بيانات '+tf+' ناقصة أو غير صالحة.');closed[tf]=a.filter(b=>b[5]!==true&&(b[0]+TF[tf])*1000<=now);const c=closed[tf];if(c.length<55)return stop('ننتظر شموعاً مغلقة كافية على '+tf+'.');const bucket=Math.floor(now/1000/TF[tf])*TF[tf];if(c.at(-1)[0]!==bucket-TF[tf])return stop('ننتظر تأكيد آخر شمعة مغلقة على '+tf+'.');const span=tf==='M1'?6:tf==='M5'?5:1,tail=c.slice(-span);if(tail.some((b,i)=>i>0&&b[0]-tail[i-1][0]!==TF[tf]))return stop('توجد فجوة في بيانات '+tf+'.');}
- const h4=trend(closed.H4),h1=trend(closed.H1);let dir=h1.direction;if(!dir)return stop('اتجاه H1 التنفيذي غير واضح.');
+ const{bars={},tick={},now=Date.now()}=input||{};const result={decision:'WAIT',bias:'MIXED',score:0,opportunity:null,waitCode:'DATA',why:'لا توجد صفقة حالياً.',poi:null,trade:{entry:null,sl:null,tp1:null,tp2:null,tp3:null},stages:FRAMES.map(tf=>({tf,ok:false,score:0,text:'بانتظار البيانات'})),meta:{}};
+ const stop=(code,m)=>{result.waitCode=code;result.score=result.stages.reduce((s,x)=>s+(Number(x.score)||0),0);result.why='لا توجد صفقة حالياً. '+m;return result;};
+ if(!positive(tick.price)||!Number.isFinite(tick.receivedAt)||now-tick.receivedAt>5000||tick.receivedAt>now+5000)return stop('DATA','الأسعار غير متاحة أو غير حديثة.');
+ if(tick.sourceAt!==null&&tick.sourceAt!==undefined&&(!Number.isFinite(tick.sourceAt)||now-tick.sourceAt>10000||tick.sourceAt>now+5000))return stop('STALE','وقت سعر المصدر غير حديث.');
+ if(tick.marketState&&!['OPEN','TRADING','ACTIVE'].includes(String(tick.marketState).toUpperCase()))return stop('CLOSED','السوق مغلق أو حالته غير مؤكدة.');
+ const closed={};for(const tf of FRAMES){const a=bars[tf];if(!Array.isArray(a)||a.length<55||a.some((b,i)=>!validBar(b)||(i>0&&b[0]<=a[i-1][0])))return stop('DATA','بيانات '+tf+' ناقصة أو غير صالحة.');closed[tf]=a.filter(b=>b[5]!==true&&(b[0]+TF[tf])*1000<=now);const c=closed[tf];if(c.length<55)return stop('DATA','ننتظر شموعاً مغلقة كافية على '+tf+'.');const bucket=Math.floor(now/1000/TF[tf])*TF[tf];if(c.at(-1)[0]!==bucket-TF[tf])return stop('DATA','ننتظر تأكيد آخر شمعة مغلقة على '+tf+'.');const span=tf==='M1'?6:tf==='M5'?5:1,tail=c.slice(-span);if(tail.some((b,i)=>i>0&&b[0]-tail[i-1][0]!==TF[tf]))return stop('DATA','توجد فجوة في بيانات '+tf+'.');}
+ const h4=trend(closed.H4),h1=trend(closed.H1);let dir=h1.direction;if(!dir)return stop('H1_TREND','اتجاه H1 التنفيذي غير واضح.');
  result.bias=h4.direction===1?'BULLISH':h4.direction===-1?'BEARISH':'MIXED';
- const h4Opp=h4.direction===-dir&&h4.strength>=.65;if(h4Opp)return stop('H4 قوي بعكس اتجاه H1.');
+ const h4Opp=h4.direction===-dir&&h4.strength>=.65;if(h4Opp)return stop('H4_CONFLICT','H4 قوي بعكس اتجاه H1.');
  const h4Score=h4.direction===dir?15:h4.direction===0?8:0;result.stages[0]={tf:'H4',ok:!h4Opp,score:h4Score,text:h4.direction===0?'محايد • لا يمنع الصفقة':h4.label};
- const h1Confirmed=h1.direction===dir&&(h1.structural===dir||(dir===1?h1.breakUp:h1.breakDown));if(!h1Confirmed)return stop('اتجاه H1 موجود لكن البنية لم تتأكد بعد.');const h1Score=25;result.stages[1]={tf:'H1',ok:true,score:h1Score,text:h1.label+' • بنية مؤكدة'};
+ const h1Confirmed=h1.direction===dir&&(h1.structural===dir||(dir===1?h1.breakUp:h1.breakDown));if(!h1Confirmed){result.stages[1]={tf:'H1',ok:false,score:12,text:h1.label+' • البنية لم تتأكد'};return stop('H1_STRUCTURE','اتجاه H1 موجود لكن البنية لم تتأكد بعد.');}const h1Score=25;result.stages[1]={tf:'H1',ok:true,score:h1Score,text:h1.label+' • بنية مؤكدة'};
  let m15Score=0,opp=null,zone=findPOI(closed.M15,dir),cont=null,p=tick.price;
  if(zone){const near=p>=zone.low-(dir===1?.2:.35)*zone.atr&&p<=zone.high+(dir===1?.35:.2)*zone.atr;if(near){opp='PULLBACK';m15Score=20;result.poi=zone;}}
  if(!opp){cont=continuation(closed.M15,dir);if(cont){const ext=atr(closed.M15);const ema20=ema(closed.M15,20).at(-1),notChasing=Math.abs(p-ema20)<=1.25*ext;if(notChasing){opp='CONTINUATION';m15Score=16;result.poi=cont;}}}
- result.opportunity=opp;result.stages[2]={tf:'M15',ok:!!opp,score:m15Score,text:opp==='PULLBACK'?'PULLBACK • عودة إلى POI':opp==='CONTINUATION'?'CONTINUATION • استمرار بعد تصحيح':'لا توجد فرصة M15 صالحة'};if(!opp)return stop('لا توجد Pullback أو Continuation صالحة على M15.');
+ result.opportunity=opp;result.stages[2]={tf:'M15',ok:!!opp,score:m15Score,text:opp==='PULLBACK'?'PULLBACK • عودة إلى POI':opp==='CONTINUATION'?'CONTINUATION • استمرار بعد تصحيح':'لا توجد فرصة M15 صالحة'};if(!opp)return stop('M15','لا توجد Pullback أو Continuation صالحة على M15.');
  const m5=closed.M5,m1=closed.M1,b5=m5.at(-1),a5=atr(m5),e5=ema(m5,20).at(-1),body5=(b5[4]-b5[1])*dir;
  let setup=false;if(opp==='PULLBACK'){const z=result.poi,touch=m5.slice(-5).some(b=>b[0]>=z.time&&b[3]<=z.high+.2*z.atr&&b[2]>=z.low-.2*z.atr);setup=touch&&body5>=.1*a5&&(b5[4]-e5)*dir>0&&(b5[4]-m5.at(-2)[4])*dir>0&&(b5[2]-b5[3])<=2*a5;}else{setup=body5>=.12*a5&&(b5[4]-e5)*dir>0&&(b5[4]-m5.at(-2)[4])*dir>.03*a5&&(b5[2]-b5[3])<=1.8*a5;}
- result.stages[3]={tf:'M5',ok:setup,score:setup?20:0,text:setup?'Setup مغلق مؤكد':'ننتظر Setup M5'};if(!setup)return stop('تأكيد M5 غير مكتمل.');
+ result.stages[3]={tf:'M5',ok:setup,score:setup?20:0,text:setup?'Setup مغلق مؤكد':'ننتظر Setup M5'};if(!setup)return stop('M5','تأكيد M5 غير مكتمل.');
  const last=m1.at(-1),previous=m1.slice(-6,-1),a1=atr(m1),level=dir===1?Math.max(...previous.map(b=>b[2])):Math.min(...previous.map(b=>b[3])),trigger=(last[4]-level)*dir>.05*a1&&(last[4]-last[1])*dir>=.15*a1&&(last[2]-last[3])<=1.8*a1,entryOK=(p-level)*dir>0&&Math.abs(p-last[4])<=.5*a1;
- result.stages[4]={tf:'M1',ok:trigger&&entryOK,score:trigger&&entryOK?20:0,text:trigger&&entryOK?'Trigger مغلق بلا مطاردة':'ننتظر Trigger M1'};if(!result.stages[4].ok)return stop('تأكيد M1 غير مكتمل أو تجاوز السعر منطقة الدخول.');
- result.score=result.stages.reduce((s,x)=>s+x.score,0);if(result.score<70)return stop('Signal Score أقل من 70.');
- const recent=m1.slice(-5),extreme=dir===1?Math.min(...recent.map(b=>b[3])):Math.max(...recent.map(b=>b[2])),sl=extreme-dir*.2*a1,risk=(p-sl)*dir;if(!positive(risk)||risk<.5*a1||risk>3*a1)return stop('مسافة الوقف غير مناسبة للتذبذب الحالي.');
- const trade={entry:p,sl,tp1:p+dir*risk,tp2:p+dir*risk*1.75,tp3:p+dir*risk*2.5};if(!Object.values(trade).every(positive))return stop('تعذر حساب مستويات صالحة.');
- result.trade=trade;result.decision=dir===1?'BUY':'SELL';result.meta={atr:a1,h4:h4.label,h1:h1.label,m15:opp,m5:'CONFIRMED',m1:'CONFIRMED'};result.why='إشارة '+opp+' بدرجة '+result.score+'/100. H1 تنفيذي وM5/M1 مؤكدان.';return result;
+ result.stages[4]={tf:'M1',ok:trigger&&entryOK,score:trigger&&entryOK?20:0,text:trigger&&entryOK?'Trigger مغلق بلا مطاردة':'ننتظر Trigger M1'};if(!result.stages[4].ok)return stop('M1','تأكيد M1 غير مكتمل أو تجاوز السعر منطقة الدخول.');
+ result.score=result.stages.reduce((s,x)=>s+x.score,0);if(result.score<70)return stop('SCORE','Signal Score أقل من 70.');
+ const recent=m1.slice(-5),extreme=dir===1?Math.min(...recent.map(b=>b[3])):Math.max(...recent.map(b=>b[2])),sl=extreme-dir*.2*a1,risk=(p-sl)*dir;if(!positive(risk)||risk<.5*a1||risk>3*a1)return stop('RISK','مسافة الوقف غير مناسبة للتذبذب الحالي.');
+ const trade={entry:p,sl,tp1:p+dir*risk,tp2:p+dir*risk*1.75,tp3:p+dir*risk*2.5};if(!Object.values(trade).every(positive))return stop('RISK','تعذر حساب مستويات صالحة.');
+ result.trade=trade;result.decision=dir===1?'BUY':'SELL';result.waitCode=null;result.meta={atr:a1,h4:h4.label,h1:h1.label,m15:opp,m5:'CONFIRMED',m1:'CONFIRMED'};result.why='إشارة '+opp+' بدرجة '+result.score+'/100. H1 تنفيذي وM5/M1 مؤكدان.';return result;
 }
 return{TF,FRAMES,formatPrice,validBar,atr,ema,swings,trend,findPOI,continuation,analyze};
 });
