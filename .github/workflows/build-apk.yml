@@ -1,4 +1,4 @@
-name: Build Market AI Scalp AI V1.7 APK
+name: Build Market AI Scalp AI V1.8 APK
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
     branches: [ scalp-ai-v1.7-chart-tools ]
 
 concurrency:
-  group: market-ai-scalp-ai-v17-${{ github.ref }}
+  group: market-ai-scalp-ai-v18-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -48,29 +48,29 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
-          key: market-ai-scalp-ai-v17-debug-signing-v1
+          key: market-ai-scalp-ai-v18-debug-signing-v1
       - name: Build and lint Android
         run: gradle :app:assembleDebug :app:lintDebug --stacktrace
       - name: Verify APK
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk Market_AI_SCALP_AI_V1_7.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Market_AI_SCALP_AI_V1_7.apk
-          sha256sum Market_AI_SCALP_AI_V1_7.apk > Market_AI_SCALP_AI_V1_7.apk.sha256
+          cp app/build/outputs/apk/debug/app-debug.apk Market_AI_SCALP_AI_V1_8.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Market_AI_SCALP_AI_V1_8.apk
+          sha256sum Market_AI_SCALP_AI_V1_8.apk > Market_AI_SCALP_AI_V1_8.apk.sha256
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Market_AI_SCALP_AI_V1_7.apk
-          path: Market_AI_SCALP_AI_V1_7.apk
+          name: Market_AI_SCALP_AI_V1_8.apk
+          path: Market_AI_SCALP_AI_V1_8.apk
           if-no-files-found: error
           retention-days: 90
       - name: Upload validation reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SCALP_AI_V1_7-validation
+          name: SCALP_AI_V1_8-validation
           path: |
             test-results/
             app/build/reports/lint-results-debug.html
-            Market_AI_SCALP_AI_V1_7.apk.sha256
+            Market_AI_SCALP_AI_V1_8.apk.sha256
           if-no-files-found: ignore
           retention-days: 30
