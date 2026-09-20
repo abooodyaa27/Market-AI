@@ -17,5 +17,6 @@ function patchLive(a,p,now,tf){if(!positive(p)||!Number.isFinite(now)||!TF[tf]||
  else out.push([bucket,p,p,p,p,true]);
  return out.slice(-160);
 }
-return {TF,normalizeTick,normalizeBars,patchLive};
+function aggregate(a,seconds){if(!Array.isArray(a)||!a.length)return[];const m=new Map();for(const b of a){const t=Math.floor(b[0]/seconds)*seconds;let g=m.get(t);if(!g){g=[t,b[1],b[2],b[3],b[4],!!b[5],b[6]??0];m.set(t,g);}else{g[2]=Math.max(g[2],b[2]);g[3]=Math.min(g[3],b[3]);g[4]=b[4];g[5]=g[5]||!!b[5];g[6]=(g[6]||0)+(b[6]||0);}}return Array.from(m.values()).sort((x,y)=>x[0]-y[0]).slice(-160);}
+return {TF,normalizeTick,normalizeBars,patchLive,aggregate};
 });
