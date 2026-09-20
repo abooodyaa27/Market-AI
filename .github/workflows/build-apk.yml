@@ -1,11 +1,11 @@
-name: Build Market AI V2 APK
+name: Build Market AI V2.1 APK
 
 on:
   workflow_dispatch:
   pull_request:
     branches: [ main ]
   push:
-    branches: [ main ]
+    branches: [ main, v2.1-build ]
 
 permissions:
   contents: read
