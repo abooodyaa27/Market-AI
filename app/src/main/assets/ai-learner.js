@@ -1,17 +1,17 @@
-/* Market AI on-device adaptive reviewer V1.3.
+/* Market AI on-device adaptive reviewer V1.4.
    Learns market environment, not only setup names. */
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.AILearner=api;})(typeof globalThis==='object'?globalThis:this,function(){
 'use strict';
-const KEY='market_ai_scalp_ai_v13_model',SHADOW_KEY='market_ai_scalp_ai_v13_shadow',MIN_LEARN=12,LR=.045,L2=.0025;
-const names=['bias','m15Align','m15Strength','m5Strength','stretch','score','isPullback','isContinuation','isMomentum','isReentry','isBTC','vol1','vol5','body1','body5','compression5','distanceEma','trendAge5','entryDistance'];
+const KEY='market_ai_scalp_ai_v14_model',SHADOW_KEY='market_ai_scalp_ai_v14_shadow',MIN_LEARN=15,LR=.04,L2=.0025;
+const names=['bias','m15Align','m15Strength','m5Strength','stretch','score','isPullback','isContinuation','isMomentum','isReentry','isBreakout','isBreakoutRetest','isFakeBreak','isLiquiditySweep','isRangeRejection','isBTC','vol1','vol5','body1','body5','compression5','distanceEma','trendAge5','entryDistance'];
 function sigmoid(z){return 1/(1+Math.exp(-Math.max(-12,Math.min(12,z))));}
-function fresh(){return{version:2,n:0,w:[0,.10,.05,.12,-.12,.18,.04,.04,.03,.03,0,-.03,-.02,.03,.03,-.04,-.06,.04,-.06],lastLearned:null};}
+function fresh(){return{version:3,n:0,w:[0,.10,.05,.12,-.12,.18,.04,.04,.03,.03,.03,.04,.02,.03,.02,0,-.03,-.02,.03,.03,-.04,-.06,.04,-.06],lastLearned:null};}
 function load(){try{const x=JSON.parse(localStorage.getItem(KEY)||'null');return x&&Array.isArray(x.w)&&x.w.length===names.length?x:fresh();}catch{return fresh();}}
 function save(m){try{localStorage.setItem(KEY,JSON.stringify(m));}catch{}}
 const num=(v,max=3)=>Math.max(-max,Math.min(max,Number(v)||0));
 function vec(candidate){
  const f=candidate?.meta?.aiFeatures||{};
- return[1,num(f.m15Align,1),num(f.m15Strength,1.5),num(f.m5Strength,1.5),num(f.stretch,2.5),num(f.score,1),f.isPullback?1:0,f.isContinuation?1:0,f.isMomentum?1:0,f.isReentry?1:0,f.isBTC?1:0,num(f.vol1,3),num(f.vol5,3),num(f.body1,3),num(f.body5,3),num(f.compression5,4),num(f.distanceEma,3),num(f.trendAge5,1),num(f.entryDistance,2)];
+ return[1,num(f.m15Align,1),num(f.m15Strength,1.5),num(f.m5Strength,1.5),num(f.stretch,2.5),num(f.score,1),f.isPullback?1:0,f.isContinuation?1:0,f.isMomentum?1:0,f.isReentry?1:0,f.isBreakout?1:0,f.isBreakoutRetest?1:0,f.isFakeBreak?1:0,f.isLiquiditySweep?1:0,f.isRangeRejection?1:0,f.isBTC?1:0,num(f.vol1,3),num(f.vol5,3),num(f.body1,3),num(f.body5,3),num(f.compression5,4),num(f.distanceEma,3),num(f.trendAge5,1),num(f.entryDistance,2)];
 }
 function probability(candidate,m=load()){const x=vec(candidate);let z=0;for(let i=0;i<x.length;i++)z+=m.w[i]*x[i];return sigmoid(z);}
 function labelFromRow(r){if(!r||r.status==='OPEN')return null;if(/^TP/.test(r.status))return 1;if(r.status==='SL')return 0;if(r.status==='EXPIRED')return Number(r.r)>0?1:Number(r.r)<0?0:null;if(r.status==='INVALIDATED')return null;return null;}
