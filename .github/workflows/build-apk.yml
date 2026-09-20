@@ -1,14 +1,14 @@
-name: Build Market AI Scalp AI V1.4 APK
+name: Build Market AI Scalp AI V1.5 APK
 
 on:
   workflow_dispatch:
   pull_request:
-    branches: [ scalp-ai-v1.4 ]
+    branches: [ scalp-ai-v1.5-live-notify ]
   push:
-    branches: [ scalp-ai-v1.4 ]
+    branches: [ scalp-ai-v1.5-live-notify ]
 
 concurrency:
-  group: market-ai-scalp-ai-v14-${{ github.ref }}
+  group: market-ai-scalp-ai-v15-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -48,29 +48,29 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
-          key: market-ai-scalp-ai-v14-debug-signing-v1
+          key: market-ai-scalp-ai-v15-debug-signing-v1
       - name: Build and lint Android
         run: gradle :app:assembleDebug :app:lintDebug --stacktrace
       - name: Verify APK
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk Market_AI_SCALP_AI_V1_4.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Market_AI_SCALP_AI_V1_4.apk
-          sha256sum Market_AI_SCALP_AI_V1_4.apk > Market_AI_SCALP_AI_V1_4.apk.sha256
+          cp app/build/outputs/apk/debug/app-debug.apk Market_AI_SCALP_AI_V1_5.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Market_AI_SCALP_AI_V1_5.apk
+          sha256sum Market_AI_SCALP_AI_V1_5.apk > Market_AI_SCALP_AI_V1_5.apk.sha256
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Market_AI_SCALP_AI_V1_4.apk
-          path: Market_AI_SCALP_AI_V1_4.apk
+          name: Market_AI_SCALP_AI_V1_5.apk
+          path: Market_AI_SCALP_AI_V1_5.apk
           if-no-files-found: error
           retention-days: 90
       - name: Upload validation reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SCALP_AI_V1_4-validation
+          name: SCALP_AI_V1_5-validation
           path: |
             test-results/
             app/build/reports/lint-results-debug.html
-            Market_AI_SCALP_AI_V1_4.apk.sha256
+            Market_AI_SCALP_AI_V1_5.apk.sha256
           if-no-files-found: ignore
           retention-days: 30
