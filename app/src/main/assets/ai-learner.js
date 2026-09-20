@@ -1,0 +1,48 @@
+/* Market AI on-device adaptive reviewer.
+   Learns conservatively from completed real + shadow signals. No cloud key required. */
+(function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.AILearner=api;})(typeof globalThis==='object'?globalThis:this,function(){
+'use strict';
+const KEY='market_ai_scalp_ai_v12_model',SHADOW_KEY='market_ai_scalp_ai_v12_shadow',MIN_LEARN=10,LR=.055,L2=.002;
+const names=['bias','m15Align','m15Strength','m5Strength','stretch','score','isPullback','isContinuation','isMomentum','isBTC'];
+function sigmoid(z){return 1/(1+Math.exp(-Math.max(-12,Math.min(12,z))));}
+function fresh(){return{version:1,n:0,w:[0,.10,.05,.12,-.12,.18,.04,.04,.02,0],lastLearned:null};}
+function load(){try{const x=JSON.parse(localStorage.getItem(KEY)||'null');return x&&Array.isArray(x.w)&&x.w.length===names.length?x:fresh();}catch{return fresh();}}
+function save(m){try{localStorage.setItem(KEY,JSON.stringify(m));}catch{}}
+function vec(candidate){
+ const f=candidate?.meta?.aiFeatures||{};
+ return[1,Number(f.m15Align)||0,Math.min(1.5,Number(f.m15Strength)||0),Math.min(1.5,Number(f.m5Strength)||0),Math.min(2.5,Number(f.stretch)||0),Math.min(1,Number(f.score)||0),f.isPullback?1:0,f.isContinuation?1:0,f.isMomentum?1:0,f.isBTC?1:0];
+}
+function probability(candidate,m=load()){const x=vec(candidate);let z=0;for(let i=0;i<x.length;i++)z+=m.w[i]*x[i];return sigmoid(z);}
+function labelFromRow(r){if(!r||r.status==='OPEN')return null;if(/^TP/.test(r.status))return 1;if(r.status==='SL')return 0;if(r.status==='EXPIRED'&&Number(r.r)<0)return 0;if(r.status==='INVALIDATED')return null;return Number(r.r)>0?1:Number(r.r)<0?0:null;}
+function trainOne(m,candidate,y){
+ const x=vec(candidate),p=probability(candidate,m),err=y-p;
+ for(let i=0;i<m.w.length;i++)m.w[i]+=LR*(err*x[i]-L2*m.w[i]);
+ m.n++;m.lastLearned=Date.now();return p;
+}
+function hydrateCandidate(row){return{meta:{aiFeatures:row.aiFeatures||{}},score:row.score||0,opportunity:row.type||null};}
+function learn(rows=[]){
+ const m=load();const learned=new Set(m.learnedIds||[]);
+ for(const r of rows){const y=labelFromRow(r);if(y===null||learned.has(r.id))continue;if(!r.aiFeatures)continue;trainOne(m,hydrateCandidate(r),y);learned.add(r.id);}
+ m.learnedIds=[...learned].slice(-1000);save(m);return m;
+}
+function review(candidate){
+ const m=load(),p=probability(candidate,m),enough=m.n>=MIN_LEARN;
+ if(!enough)return{mode:'LEARNING',approve:true,prob:p,confidence:Math.min(1,m.n/MIN_LEARN),samples:m.n,reason:'AI يتعلم حالياً؛ لا يمنع الإشارة قبل اكتمال الحد الأدنى من النتائج.'};
+ if(p>=.56)return{mode:'APPROVE',approve:true,prob:p,confidence:Math.min(1,(m.n-MIN_LEARN+1)/25),samples:m.n,reason:'AI وافق على جودة المرشح وفق النتائج المتعلمة.'};
+ if(p<.43)return{mode:'REJECT',approve:false,prob:p,confidence:Math.min(1,(m.n-MIN_LEARN+1)/25),samples:m.n,reason:'AI رفض المرشح لأن الجودة المتوقعة منخفضة وفق النتائج السابقة.'};
+ return{mode:'CAUTION',approve:true,prob:p,confidence:Math.min(1,(m.n-MIN_LEARN+1)/25),samples:m.n,reason:'AI محايد؛ يسمح بإشارة القواعد مع تنبيه حذر.'};
+}
+function shadowLoad(){try{const x=JSON.parse(localStorage.getItem(SHADOW_KEY)||'[]');return Array.isArray(x)?x:[];}catch{return[];}}
+function shadowSave(x){try{localStorage.setItem(SHADOW_KEY,JSON.stringify(x.slice(-300)));}catch{}}
+function addShadow(symbol,candidate,review,now=Date.now()){
+ if(!candidate||!['BUY','SELL'].includes(candidate.decision))return null;const rows=shadowLoad(),dup=rows.find(x=>x.status==='OPEN'&&x.symbol===symbol&&x.side===candidate.decision&&Math.abs(x.entry-candidate.trade.entry)<=Math.max(.00001,Math.abs(candidate.trade.entry)*.00005));if(dup)return dup;
+ const r={id:'shadow-'+symbol+'-'+now,symbol,openedAt:now,closedAt:null,status:'OPEN',side:candidate.decision,type:candidate.opportunity,score:candidate.score,entry:candidate.trade.entry,sl:candidate.trade.sl,tp1:candidate.trade.tp1,tp2:candidate.trade.tp2,tp3:candidate.trade.tp3,r:0,aiReview:review?.mode||'REJECT',aiFeatures:candidate.meta?.aiFeatures||null};rows.push(r);shadowSave(rows);return r;
+}
+function updateShadow(symbol,price,now=Date.now()){
+ if(!(Number.isFinite(price)&&price>0))return;const rows=shadowLoad();let changed=false;
+ for(const x of rows){if(x.symbol!==symbol||x.status!=='OPEN')continue;const d=x.side==='BUY'?1:-1,risk=Math.abs(x.entry-x.sl);if((price-x.tp3)*d>=0){x.status='TP3';x.r=1.8;x.closedAt=now;}else if((price-x.sl)*d<=0){x.status='SL';x.r=-1;x.closedAt=now;}else if(now-x.openedAt>=4*60*60*1000){x.status='EXPIRED';x.r=risk?((price-x.entry)*d/risk):0;x.closedAt=now;}changed=true;}if(changed)shadowSave(rows);
+}
+function allTrainingRows(real=[]){return real.concat(shadowLoad().filter(x=>x.status!=='OPEN'));}
+function info(){const m=load();return{samples:m.n,ready:m.n>=MIN_LEARN,weights:Object.fromEntries(names.map((n,i)=>[n,m.w[i]])),lastLearned:m.lastLearned};}
+return{review,learn,addShadow,updateShadow,allTrainingRows,info,probability,MIN_LEARN};
+});
