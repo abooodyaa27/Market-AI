@@ -1,0 +1,8 @@
+.gradle/
+app/build/
+build/
+node_modules/
+local.properties
+*.apk
+*.apk.sha256
+test-results/

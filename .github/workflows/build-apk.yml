@@ -1,37 +1,70 @@
-name: Build Market AI APK
+name: Build Market AI V2 APK
 
 on:
   workflow_dispatch:
   push:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check JavaScript and analysis logic
+        run: |
+          for file in app/src/main/assets/*.js; do node --check "$file"; done
+          npm test
+      - name: Install browser test tools
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Test mobile UI and BUY SELL WAIT flows
+        run: npm run test:ui
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-
-      - name: Build APK
-        run: gradle :app:assembleDebug
-
-      - name: Rename APK
-        run: cp app/build/outputs/apk/debug/app-debug.apk Market_AI.apk
-
+      - name: Retain test signing key for subsequent V2 builds
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: market-ai-v2-debug-signing-v1
+      - name: Build and lint Android
+        run: gradle :app:assembleDebug :app:lintDebug --stacktrace
+      - name: Verify APK
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk Market_AI_V2.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Market_AI_V2.apk
+          sha256sum Market_AI_V2.apk > Market_AI_V2.apk.sha256
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Market-AI-APK
-          path: Market_AI.apk
+          name: Market_AI_V2.apk
+          path: Market_AI_V2.apk
+          if-no-files-found: error
+          retention-days: 90
+      - name: Upload validation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: V2-validation
+          path: |
+            test-results/
+            app/build/reports/lint-results-debug.html
+            Market_AI_V2.apk.sha256
+          if-no-files-found: ignore
           retention-days: 30

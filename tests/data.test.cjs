@@ -1,0 +1,7 @@
+const test=require('node:test'),assert=require('node:assert/strict');
+const D=require('../app/src/main/assets/market-data.js');
+test('tick patches only current candle and never rewrites history',()=>{const a=[[60,10,12,9,11,false],[120,11,13,10,12,true]],copy=JSON.stringify(a);const r=D.patchLive(a,14,150000,'M1');assert.deepEqual(r[0],a[0]);assert.equal(r[1][2],14);assert.equal(r[1][4],14);assert.equal(JSON.stringify(a),copy);});
+test('rollover creates a new bucket, old synthetic bar stays unconfirmed',()=>{const r=D.patchLive([[120,11,13,10,12,true]],14,181000,'M1');assert.equal(r.length,2);assert.deepEqual(r[1],[180,14,14,14,14,true]);assert.equal(r[0][4],12);assert.equal(r[0][5],true);});
+test('an old quote cannot overwrite a newer candle',()=>{const a=[[180,12,14,11,13,true]];assert.deepEqual(D.patchLive(a,8,121000,'M1'),a);});
+test('normalization sorts and validates OHLC, excludes malformed candles',()=>{const result=D.normalizeBars({bars:[{openTime:'2026-01-01T00:00:00Z',open:10,high:12,low:9,close:11,isOpen:false},{openTime:'bad',open:1,high:2,low:0,close:1}]},'M1');assert.equal(result.length,1);assert.equal(result[0][4],11);});
+test('invalid quote data cannot become a zero price or a fresh signal',()=>{assert.equal(D.normalizeTick({mid:null},1000),null);assert.equal(D.normalizeTick({mid:'bad'},1000),null);assert.equal(D.normalizeTick({bid:100,ask:102},1000).price,101);});
