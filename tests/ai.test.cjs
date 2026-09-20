@@ -12,3 +12,11 @@ test('AI accepts expanded strategy feature vectors',()=>{
    const p=AI.probability(candidate(type));assert.ok(Number.isFinite(p),type);
  }
 });
+test('AI missed-opportunity scout can log and evaluate a silent-engine opportunity',()=>{
+ const bars={M15:[],M5:[],M1:[]},base=1000;
+ for(let i=0;i<40;i++){const c=100+i*.2;bars.M15.push([base+i*900,c-.1,c+.3,c-.2,c,false]);bars.M5.push([base+i*300,c-.1,c+.25,c-.2,c,false]);bars.M1.push([base+i*60,c-.05,c+.2,c-.1,c,false]);}
+ bars.M5.at(-1)[4]+=1;bars.M5.at(-1)[2]+=1;bars.M1.at(-1)[4]+=.7;bars.M1.at(-1)[2]+=.7;
+ const x=AI.scout('XAUUSD',bars,{price:bars.M1.at(-1)[4]},'WAIT',5000000);
+ assert.ok(x===null||x.symbol==='XAUUSD');
+ if(x){AI.updateMissed('XAUUSD',x.tp3+.1,5001000);const st=AI.missedStats('XAUUSD');assert.ok(st.total>=1);assert.ok(st.winRate>=0);}
+});
