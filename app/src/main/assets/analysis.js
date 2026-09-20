@@ -37,7 +37,7 @@ function analyze(input){
  result.bias=h4.direction===1?'BULLISH':h4.direction===-1?'BEARISH':'MIXED';
  const h4Opp=h4.direction===-dir&&h4.strength>=.65;if(h4Opp)return stop('H4 قوي بعكس اتجاه H1.');
  const h4Score=h4.direction===dir?15:h4.direction===0?8:0;result.stages[0]={tf:'H4',ok:!h4Opp,score:h4Score,text:h4.direction===0?'محايد • لا يمنع الصفقة':h4.label};
- const h1Confirmed=h1.direction===dir&&(h1.structural===dir||(dir===1?h1.breakUp:h1.breakDown));const h1Score=h1Confirmed?25:18;result.stages[1]={tf:'H1',ok:true,score:h1Score,text:h1Confirmed?h1.label+' • بنية مؤكدة':h1.label+' • اتجاه تنفيذي'};
+ const h1Confirmed=h1.direction===dir&&(h1.structural===dir||(dir===1?h1.breakUp:h1.breakDown));if(!h1Confirmed)return stop('اتجاه H1 موجود لكن البنية لم تتأكد بعد.');const h1Score=25;result.stages[1]={tf:'H1',ok:true,score:h1Score,text:h1.label+' • بنية مؤكدة'};
  let m15Score=0,opp=null,zone=findPOI(closed.M15,dir),cont=null,p=tick.price;
  if(zone){const near=p>=zone.low-(dir===1?.2:.35)*zone.atr&&p<=zone.high+(dir===1?.35:.2)*zone.atr;if(near){opp='PULLBACK';m15Score=20;result.poi=zone;}}
  if(!opp){cont=continuation(closed.M15,dir);if(cont){const ext=atr(closed.M15);const ema20=ema(closed.M15,20).at(-1),notChasing=Math.abs(p-ema20)<=1.25*ext;if(notChasing){opp='CONTINUATION';m15Score=16;result.poi=cont;}}}
