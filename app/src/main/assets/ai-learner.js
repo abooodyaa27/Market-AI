@@ -63,7 +63,17 @@ function updateMissed(symbol,price,now=Date.now()){
  changed=true;}if(changed)missedSave(rows);
 }
 function missedStats(symbol){const rows=missedLoad().filter(x=>!symbol||x.symbol===symbol),closed=rows.filter(x=>x.status!=='OPEN'),wins=closed.filter(x=>x.status==='WIN');return{total:rows.length,closed:closed.length,wins:wins.length,losses:closed.length-wins.length,winRate:closed.length?Math.round(wins.length/closed.length*100):0,avgMove:closed.length?closed.reduce((s,x)=>s+(Number(x.maxFavorablePct)||0),0)/closed.length:0};}
+function missedCsv(symbol){
+ const rows=missedLoad().filter(x=>!symbol||x.symbol===symbol);
+ const h=['id','symbol','side','type','reason','openedAt','closedAt','entry','sl','tp1','tp2','tp3','status','highestTarget','maxFavorablePct','maxAdversePct','successPct','r','score'];
+ return [h.join(','),...rows.map(x=>h.map(k=>JSON.stringify(x[k]??'')).join(','))].join('\n');
+}
+function missedJson(symbol){return JSON.stringify(missedLoad().filter(x=>!symbol||x.symbol===symbol),null,2);}
+function trainingExport(){
+ const model=info(),missed=missedLoad(),shadow=shadowLoad();
+ return JSON.stringify({version:'1.7',exportedAt:Date.now(),model,missedOpportunities:missed,shadowOutcomes:shadow},null,2);
+}
 function allTrainingRows(real=[]){return real.concat(shadowLoad().filter(x=>x.status!=='OPEN')).concat(missedLoad().filter(x=>x.status!=='OPEN'));}
 function info(){const m=load();return{samples:m.n,ready:m.n>=MIN_LEARN,weights:Object.fromEntries(names.map((n,i)=>[n,m.w[i]])),lastLearned:m.lastLearned};}
-return{review,learn,addShadow,updateShadow,allTrainingRows,info,probability,MIN_LEARN,scout,updateMissed,missedLoad,missedStats};
+return{review,learn,addShadow,updateShadow,allTrainingRows,info,probability,MIN_LEARN,scout,updateMissed,missedLoad,missedStats,missedCsv,missedJson,trainingExport};
 });
