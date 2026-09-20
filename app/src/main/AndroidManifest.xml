@@ -4,7 +4,7 @@
 
     <application
         android:allowBackup="false"
-        android:label="Market AI"
+        android:label="Market AI Scalp"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@style/AppTheme"
