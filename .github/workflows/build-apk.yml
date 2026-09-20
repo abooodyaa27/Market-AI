@@ -1,14 +1,14 @@
-name: Build Market AI V2.2 APK
+name: Build Market AI V2.2.1 APK
 
 on:
   workflow_dispatch:
   pull_request:
-    branches: [ main, scalp-m1-m5-m15 ]
+    branches: [ v2.2.1-stability ]
   push:
-    branches: [ main ]
+    branches: [ v2.2.1-stability ]
 
 concurrency:
-  group: market-ai-v22-${{ github.ref }}
+  group: market-ai-v221-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -48,29 +48,29 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.android/debug.keystore
-          key: market-ai-v22-debug-signing-v1
+          key: market-ai-v221-debug-signing-v1
       - name: Build and lint Android
         run: gradle :app:assembleDebug :app:lintDebug --stacktrace
       - name: Verify APK
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk Market_AI_V2_2.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Market_AI_V2_2.apk
-          sha256sum Market_AI_V2_2.apk > Market_AI_V2_2.apk.sha256
+          cp app/build/outputs/apk/debug/app-debug.apk Market_AI_V2_2_1.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Market_AI_V2_2_1.apk
+          sha256sum Market_AI_V2_2_1.apk > Market_AI_V2_2_1.apk.sha256
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Market_AI_V2_2.apk
-          path: Market_AI_V2_2.apk
+          name: Market_AI_V2_2_1.apk
+          path: Market_AI_V2_2_1.apk
           if-no-files-found: error
           retention-days: 90
       - name: Upload validation reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: V2_2-validation
+          name: V2_2_1-validation
           path: |
             test-results/
             app/build/reports/lint-results-debug.html
-            Market_AI_V2_2.apk.sha256
+            Market_AI_V2_2_1.apk.sha256
           if-no-files-found: ignore
           retention-days: 30
