@@ -5,7 +5,7 @@ on:
   pull_request:
     branches: [ scalp-m1-m5-m15 ]
   push:
-    branches: [ main ]
+    branches: [ scalp-m1-m5-m15 ]
 
 concurrency:
   group: market-ai-scalp-v1-${{ github.ref }}
