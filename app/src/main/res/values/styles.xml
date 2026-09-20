@@ -6,7 +6,6 @@
         <item name="android:navigationBarColor">@color/market_bg</item>
         <item name="android:colorAccent">@color/market_gold</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
         <item name="android:windowBackground">@color/market_bg</item>
     </style>
 </resources>
