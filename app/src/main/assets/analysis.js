@@ -38,7 +38,7 @@ function analyze(input){
  const m5=closed.M5,p=tick.price,a5=atr(m5),e5=ema(m5,9).at(-1),b5=m5.at(-1),body5=(b5[4]-b5[1])*dir,progress5=(b5[4]-m5.at(-2)[4])*dir;
  let opp=null,zone=findPOI(m5,dir);
  if(zone){const near=p>=zone.low-.28*zone.atr&&p<=zone.high+.28*zone.atr,touch=m5.slice(-5).some(b=>b[3]<=zone.high+.2*zone.atr&&b[2]>=zone.low-.2*zone.atr);if(near&&touch&&body5>=.05*a5&&progress5>=0){opp='PULLBACK';result.poi=zone;}}
- if(!opp){const cont=continuation(m5,dir);if(cont&&Math.abs(p-e5)<=1.1*a5&&body5>=.05*a5&&progress5>.01*a5){opp='CONTINUATION';result.poi=cont;}}
+ if(!opp){const cont=continuation(m5,dir),trendContinuation=Math.abs(p-e5)<=1.2*a5&&body5>=.04*a5&&progress5>=0&&(b5[4]-e5)*dir>=-.08*a5;if((cont||trendContinuation)){opp='CONTINUATION';result.poi=cont||{type:'CONTINUATION',atr:a5,low:Math.min(...m5.slice(-6).map(b=>b[3])),high:Math.max(...m5.slice(-6).map(b=>b[2])),time:m5.at(-6)[0]};}}
  result.opportunity=opp;const setup=!!opp&&(b5[2]-b5[3])<=2.2*a5;
  result.stages[1]={tf:'M5',ok:setup,score:setup?40:0,text:setup?(opp+' • Setup مؤكد'):'ننتظر Pullback أو Continuation على M5'};if(!setup)return stop('M5','لا توجد فرصة M5 صالحة الآن.');
  const m1=closed.M1,last=m1.at(-1),previous=m1.slice(-5,-1),a1=atr(m1),level=dir===1?Math.max(...previous.map(b=>b[2])):Math.min(...previous.map(b=>b[3])),trigger=(last[4]-level)*dir>.02*a1&&(last[4]-last[1])*dir>=.08*a1&&(last[2]-last[3])<=2.2*a1,entryOK=(p-level)*dir>0&&Math.abs(p-last[4])<=.45*a1;
