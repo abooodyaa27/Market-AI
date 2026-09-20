@@ -17,3 +17,11 @@ function scenario(symbol='XAUUSD',sell=false){
  return {symbol,bars:b,tick:{price:(sell?99.6:100.4)*scale,receivedAt:NOW,sourceAt:NOW,marketState:'OPEN'},now:NOW};
 }
 module.exports={NOW,seconds,bars,trend,scenario};
+function continuation(symbol='XAUUSD',sell=false){
+ const s=scenario(symbol,sell),v=Array.from({length:66},(_,i)=>{const c=97+i*.048;return[c-.08,c+.2,c-.22,c];});
+ v.push([100.12,100.32,99.94,100.08],[100.08,100.28,99.96,100.16],[100.16,100.30,99.98,100.10],[100.10,100.35,100,100.22]);
+ const scale=symbol==='BTCUSD'?600:30;
+ s.bars.M15=bars('M15',v).map(([t,o,h,l,c,open])=>sell?[t,(200-o)*scale,(200-l)*scale,(200-h)*scale,(200-c)*scale,open]:[t,o*scale,h*scale,l*scale,c*scale,open]);
+ return s;
+}
+module.exports.continuation=continuation;

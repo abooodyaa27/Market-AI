@@ -1,6 +1,13 @@
 package com.marketai.standalone;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.webkit.JavascriptInterface;
+import java.io.OutputStream;
+import java.io.File;
+import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
+import org.json.JSONObject;
 import android.os.Bundle;
 import android.os.Build;
 import android.webkit.WebResourceRequest;
@@ -15,10 +22,75 @@ import android.graphics.Color;
 
 public class MainActivity extends Activity {
     private WebView web;
+    private static final int EXPORT_REQUEST = 210;
+    private byte[] pendingExport;
+    private File pendingFile() { return new File(getFilesDir(), "pending-signal-export"); }
+    private void clearPending() {
+        pendingExport = null;
+        try { Files.deleteIfExists(pendingFile().toPath()); } catch (Exception ignored) { }
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        outState.putBoolean("signalExportPending", pendingExport != null);
+        super.onSaveInstanceState(outState);
+    }
+
+    private void exportStatus(String message) {
+        runOnUiThread(() -> {
+            if (web != null) web.evaluateJavascript(
+                    "window.onSignalExportResult && window.onSignalExportResult(" + JSONObject.quote(message) + ")", null);
+        });
+    }
+
+    private final class ExportBridge {
+        @JavascriptInterface
+        public void exportReport(String format, String contents) {
+            if ((!"csv".equals(format) && !"json".equals(format)) || contents == null) return;
+            byte[] bytes = contents.getBytes(StandardCharsets.UTF_8);
+            if (bytes.length > 10 * 1024 * 1024) {
+                exportStatus("حجم التصدير يتجاوز 10 MB."); return;
+            }
+            runOnUiThread(() -> {
+                if (pendingExport != null) { exportStatus("أكمل نافذة الحفظ الحالية أولاً."); return; }
+                pendingExport = bytes;
+                Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("csv".equals(format) ? "text/csv" : "application/json");
+                intent.putExtra(Intent.EXTRA_TITLE, "Market_AI_signals_V2_1_" + System.currentTimeMillis() + "." + format);
+                try { Files.write(pendingFile().toPath(), bytes); startActivityForResult(intent, EXPORT_REQUEST); }
+                catch (Exception e) { clearPending(); exportStatus("تعذر فتح نافذة حفظ الملف."); }
+            });
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != EXPORT_REQUEST) return;
+        final byte[] bytes = pendingExport;
+        clearPending();
+        if (resultCode != RESULT_OK || data == null || data.getData() == null || bytes == null) {
+            exportStatus("تم إلغاء التصدير؛ السجل محفوظ داخل التطبيق."); return;
+        }
+        final android.net.Uri destination = data.getData();
+        new Thread(() -> {
+            try (OutputStream out = getContentResolver().openOutputStream(destination, "wt")) {
+                if (out == null) throw new java.io.IOException("No output stream");
+                out.write(bytes);
+                out.flush();
+                exportStatus("تم حفظ ملف التصدير بنجاح.");
+            } catch (Exception e) { exportStatus("تعذر حفظ ملف التصدير. اختر مكاناً آخر."); }
+        }).start();
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (savedInstanceState != null && savedInstanceState.getBoolean("signalExportPending")) {
+            try { if (pendingFile().length() <= 10 * 1024 * 1024) pendingExport = Files.readAllBytes(pendingFile().toPath()); }
+            catch (Exception ignored) { clearPending(); }
+        } else { clearPending(); }
 
         web = new WebView(this);
         web.setBackgroundColor(Color.rgb(8, 12, 17));
@@ -35,6 +107,7 @@ public class MainActivity extends Activity {
         s.setUseWideViewPort(true);
         s.setLoadWithOverviewMode(true);
 
+        web.addJavascriptInterface(new ExportBridge(), "AndroidExports");
         web.setWebChromeClient(new WebChromeClient());
         web.setWebViewClient(new WebViewClient() {
             @Override
@@ -61,7 +134,7 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onPause() {
-        if (web != null) { web.onPause(); web.pauseTimers(); }
+        if (web != null) { web.evaluateJavascript("window.flushSignalHistory && window.flushSignalHistory()", null); web.onPause(); web.pauseTimers(); }
         super.onPause();
     }
 

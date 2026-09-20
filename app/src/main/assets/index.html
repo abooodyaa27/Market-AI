@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#080c11">
-<title>Market AI V2</title>
+<title>Market AI V2.1</title>
 <style>
 :root{
   --bg:#080c11;--panel:#111923;--panel2:#17212c;--border:#273442;
@@ -67,15 +67,19 @@ canvas{width:100%;height:390px;display:block;touch-action:pan-y}.chartlabel{posi
   color:#ffd4d7;padding:11px;border-radius:13px;font-size:11px}
 .bottom{position:fixed;bottom:0;left:0;right:0;z-index:40;background:rgba(9,13,18,.95);
   border-top:1px solid var(--border);backdrop-filter:blur(14px);padding:7px 10px calc(7px + env(safe-area-inset-bottom))}
-.nav{max-width:780px;margin:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:5px}.nav button{border:0;background:transparent;
+.nav{max-width:780px;margin:auto;display:grid;grid-template-columns:repeat(4,1fr);gap:5px}.nav button{border:0;background:transparent;
   color:#8f9dac;padding:8px;border-radius:11px;font-size:11px;font-weight:700}.nav button.active{color:#f0d18a;background:rgba(221,183,95,.08)}
 @media(min-width:620px){.levels{grid-template-columns:repeat(5,1fr)}.level.entry{grid-column:auto}.price{font-size:48px}}
+[hidden]{display:none!important}
+.history-filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:16px 0}.history-filters label{font-size:11px;color:var(--muted)}select{display:block;width:100%;margin-top:6px;background:#17212c;color:var(--text);border:1px solid var(--border);border-radius:9px;padding:9px 4px;font-size:11px}
+.history-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}.history-stats .level b{font-size:21px}.export-actions{display:flex;gap:8px;margin-top:15px}.export-actions button{flex:1;border:1px solid var(--border);border-radius:12px;padding:12px;background:#17212c;color:#ffe4a5}
+.table-scroll{overflow-x:auto;margin-top:15px;border:1px solid var(--border);border-radius:12px}table{width:100%;border-collapse:collapse;direction:ltr;font-size:10px}td,th{text-align:left;padding:10px 6px;border-bottom:1px solid var(--border)}summary{cursor:pointer;line-height:1.8}.history-record summary{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.history-record summary strong{font-size:12px;direction:ltr}.history-record small{width:100%;color:var(--muted);font-size:10px}dl{display:grid;grid-template-columns:1fr 1.6fr;gap:9px;font-size:11px}dt{color:var(--muted)}dd{margin:0;overflow-wrap:anywhere;direction:ltr}.nav button{font-size:10px}.brand h1{font-size:21px}
 </style>
 </head>
 <body>
-<div class="app">
+<div class="app" id="marketPage">
   <div class="top">
-    <div class="brand"><div><h1>Market AI <small>V2</small></h1><small>تحليل محلي • بيانات سوق خارجية</small></div>
+    <div class="brand"><div><h1>Market AI <small>V2.1</small></h1><small>تحليل محلي • بيانات سوق خارجية</small></div>
       <div class="feed"><span class="dot" id="dot"></span><span id="feed">CONNECTING</span></div></div>
     <div class="tabs">
       <button id="goldTab" class="tab gold active" onclick="setAsset('XAUUSD')">Gold • الذهب</button>
@@ -83,6 +87,7 @@ canvas{width:100%;height:390px;display:block;touch-action:pan-y}.chartlabel{posi
     </div>
   </div>
 
+  <div id="journalWarning" class="wait" role="alert" hidden></div>
   <div id="err" class="err"></div>
 
   <section id="home" class="card">
@@ -90,6 +95,7 @@ canvas{width:100%;height:390px;display:block;touch-action:pan-y}.chartlabel{posi
       <div><div id="symbol" class="symbol">XAUUSD</div><div id="price" class="price">—</div></div>
       <div class="chips"><span id="bias" class="chip muted">Bias: —</span><span id="decisionChip" class="chip warn">WAIT</span></div>
     </div>
+    <div class="chips" style="margin-top:10px"><span id="signalScore" class="chip">Signal Score: 0/100</span><span id="opportunityType" class="chip">—</span></div>
     <div id="updated" class="note" aria-live="off">آخر استلام: —</div>
     <div id="reason" class="reason">جاري تحميل بيانات السوق...</div>
   </section>
@@ -113,11 +119,11 @@ canvas{width:100%;height:390px;display:block;touch-action:pan-y}.chartlabel{posi
     <div id="waiting" class="wait">لا توجد صفقة حالياً.</div>
   </section>
 
-  <div id="analysisSec" class="title"><h2>التحليل المحلي</h2><small>H4 Bias → H1 Structure → M15 POI → M5 Setup → M1 Trigger</small></div>
+  <div id="analysisSec" class="title"><h2>التحليل المحلي</h2><small>H4 Macro → H1 Direction → M15 Path → M5 Setup → M1 Trigger</small></div>
   <div class="analysis">
-    <div class="a"><b>H4 • الاتجاه العام</b><p id="h4">—</p></div>
-    <div class="a"><b>H1 • البنية</b><p id="h1">—</p></div>
-    <div class="a full"><b>M15 • POI</b><p id="m15">—</p></div>
+    <div class="a"><b>H4 • Macro Bias</b><p id="h4">—</p></div>
+    <div class="a"><b>H1 • الاتجاه التنفيذي</b><p id="h1">—</p></div>
+    <div class="a full"><b>M15 • مسار الفرصة</b><p id="m15">—</p></div>
     <div class="a"><b>M5 • Setup</b><p id="m5">—</p></div>
     <div class="a"><b>M1 • Trigger</b><p id="m1">—</p></div>
   </div>
@@ -128,15 +134,36 @@ canvas{width:100%;height:390px;display:block;touch-action:pan-y}.chartlabel{posi
   </div>
 </div>
 
+<section id="historyPage" class="app" hidden>
+  <div class="title"><h1>Signal History</h1><span class="chip">V2.1</span></div>
+  <p class="note">سجل إشارات حقيقية من تغذية السوق أثناء تشغيل التطبيق. مستويات الدخول ثابتة لكل إشارة. تتم متابعة الذهب والبتكوين معاً.</p>
+  <p id="historyError" class="wait" role="alert" hidden></p>
+  <div class="history-filters">
+    <label>الأصل<select id="historyAsset"><option value="ALL">الكل</option><option>XAUUSD</option><option>BTCUSD</option></select></label>
+    <label>الفرصة<select id="historyMode"><option value="ALL">الكل</option><option>PULLBACK</option><option>CONTINUATION</option></select></label>
+    <label>الإصدار<select id="historyVersion"><option value="2.1.0">2.1.0</option><option value="ALL">كل الإصدارات</option></select></label>
+  </div>
+  <div id="historyStats" class="history-stats"></div>
+  <p class="note">Win Rate = نسبة R الموجب من الإشارات المغلقة ذات خروج مرصود. متوسط R لنفس العينة، دون تكاليف تنفيذ. نسب TP/SL = اللمسات المرصودة من إجمالي الإشارات، بما فيها المفتوحة. الإغلاق غير المعلوم مستبعد من Win Rate ومتوسط R.</p>
+  <div class="table-scroll"><table><thead><tr><th>الأصل</th><th>الفرصة</th><th>العدد</th><th>Win Rate</th><th>متوسط R</th></tr></thead><tbody id="historyGroups"></tbody></table></div>
+  <div class="export-actions"><button id="exportCSV">تصدير CSV</button><button id="exportJSON">تصدير JSON</button></div>
+  <p id="exportStatus" class="note" role="status"></p>
+  <details class="card"><summary>قواعد القياس والمتابعة</summary><p class="note">نسجّل TP1 وTP2 كمحطات، ونواصل حتى TP3 أو SL أو 30 دقيقة أو انعكاس H1 المؤكد. انتهاء المدة يغلق عند أول عينة لاحقة. فجوة رصد تزيد عن 10 ثوانٍ تجعل النتيجة INVALIDATED غير معلومة، ولا ننسب أهدافاً أو وقفاً لحركة لم نرصدها. لا تعمل المتابعة والتسجيل أثناء إغلاق التطبيق؛ البيانات السابقة محفوظة. الأسعار كل ثانية لا تكشف كل حركة بين العينات؛ هذه نتائج رصد وليست صفقات منفذة.</p></details>
+  <p id="historyCount" class="note"></p><div id="historyList"></div>
+</section>
+
 <nav class="bottom"><div class="nav">
   <button class="active" onclick="go('home',this)">الرئيسية</button>
   <button onclick="go('chartSec',this)">الشارت</button>
   <button onclick="go('tradeSec',this)">الصفقة</button>
+  <button id="historyNav" onclick="go('historyPage',this)">Signal History</button>
 </div></nav>
 
 <script src="analysis.js"></script>
 <script src="market-data.js"></script>
 <script src="chart.js"></script>
+<script src="journal.js"></script>
+<script src="history-ui.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
