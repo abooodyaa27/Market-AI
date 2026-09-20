@@ -1,4 +1,4 @@
-/* Market AI SCALP AI V1.4 — multi-strategy opportunity engine + adaptive market learner. */
+/* Market AI SCALP AI V1.5 — live M5/M1 candidate detection + adaptive market learner. */
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.MarketAnalysis=api;})(typeof globalThis==='object'?globalThis:this,function(){
 'use strict';
 const TF={M15:900,M5:300,M1:60},FRAMES=['M15','M5','M1'];
@@ -79,12 +79,14 @@ function analyze(input){
  if(tick.sourceAt!==null&&tick.sourceAt!==undefined&&(!Number.isFinite(tick.sourceAt)||now-tick.sourceAt>10000||tick.sourceAt>now+5000))return stop('STALE','وقت سعر المصدر غير حديث.');
  if(tick.marketState&&!['OPEN','TRADING','ACTIVE'].includes(String(tick.marketState).toUpperCase()))return stop('CLOSED','السوق مغلق أو حالته غير مؤكدة.');
  const closed={};for(const tf of FRAMES){const a=bars[tf];if(!Array.isArray(a)||a.length<55||a.some((b,i)=>!validBar(b)||(i>0&&b[0]<=a[i-1][0])))return stop('DATA','بيانات '+tf+' ناقصة أو غير صالحة.');closed[tf]=a.filter(b=>b[5]!==true&&(b[0]+TF[tf])*1000<=now);const c=closed[tf];if(c.length<55)return stop('DATA','ننتظر شموعاً مغلقة كافية على '+tf+'.');const bucket=Math.floor(now/1000/TF[tf])*TF[tf];if(c.at(-1)[0]!==bucket-TF[tf])return stop('DATA','ننتظر آخر شمعة مغلقة على '+tf+'.');const span=tf==='M1'?6:tf==='M5'?5:3,tail=c.slice(-span);if(tail.some((b,i)=>i>0&&b[0]-tail[i-1][0]!==TF[tf]))return stop('DATA','توجد فجوة في بيانات '+tf+'.');}
- const m15=trend(closed.M15),m5t=trend(closed.M5),dir=m5t.direction;if(!dir)return stop('M5_TREND','اتجاه M5 التنفيذي غير واضح.');
+ const liveM5=(bars.M5||[]).filter(validBar),liveM1=(bars.M1||[]).filter(validBar);
+ const execM5=liveM5.length>=55?liveM5:closed.M5,execM1=liveM1.length>=55?liveM1:closed.M1;
+ const m15=trend(closed.M15),m5t=trend(execM5),dir=m5t.direction;if(!dir)return stop('M5_TREND','اتجاه M5 التنفيذي غير واضح.');
  const strongOpp=m15.direction===-dir&&m15.strength>=.75;if(strongOpp)return stop('M15_CONFLICT','M15 قوي بعكس اتجاه M5.');
  result.bias=m15.direction===1?'BULLISH':m15.direction===-1?'BEARISH':'MIXED';
  const m15Score=m15.direction===dir?30:m15.direction===0?15:8;
  result.stages[0]={tf:'M15',ok:!strongOpp,score:m15Score,text:m15.direction===dir?m15.label+' • متوافق':m15.direction===0?'محايد • لا يمنع السكالب':'عكس M5 لكن ضعيف'};
- const m5=closed.M5,p=tick.price,a5=atr(m5),e5=ema(m5,9).at(-1),b5=m5.at(-1),body5=(b5[4]-b5[1])*dir,progress5=(b5[4]-m5.at(-2)[4])*dir;
+ const m5=execM5,p=tick.price,a5=atr(m5),e5=ema(m5,9).at(-1),b5=m5.at(-1),body5=(b5[4]-b5[1])*dir,progress5=(b5[4]-m5.at(-2)[4])*dir;
  let opp=null,entryBasis=[],zone=findPOI(m5,dir);
  if(zone){const near=p>=zone.low-.28*zone.atr&&p<=zone.high+.28*zone.atr,touch=m5.slice(-5).some(b=>b[3]<=zone.high+.2*zone.atr&&b[2]>=zone.low-.2*zone.atr);if(near&&touch&&body5>=.05*a5&&progress5>=0){opp='PULLBACK';result.poi=zone;entryBasis.push('تصحيح إلى POI حديثة ثم ارتداد مع اتجاه M5');}}
  if(!opp){
@@ -97,7 +99,7 @@ function analyze(input){
  }
  result.opportunity=opp;const setup=!!opp&&(b5[2]-b5[3])<=2.3*a5;
  result.stages[1]={tf:'M5',ok:setup,score:setup?40:0,text:setup?(opp+' • Setup مؤكد'):'ننتظر فرصة فنية صالحة على M5'};if(!setup)return stop('M5','لا توجد فرصة M5 صالحة الآن.');
- const m1=closed.M1,last=m1.at(-1),previous=m1.slice(-5,-1),a1=atr(m1),level=dir===1?Math.max(...previous.map(b=>b[2])):Math.min(...previous.map(b=>b[3]));
+ const m1=execM1,last=m1.at(-1),previous=m1.slice(-5,-1),a1=atr(m1),level=dir===1?Math.max(...previous.map(b=>b[2])):Math.min(...previous.map(b=>b[3]));
  let trigger=(last[4]-level)*dir>.02*a1&&(last[4]-last[1])*dir>=.08*a1&&(last[2]-last[3])<=2.2*a1,entryDistance=Math.abs(p-last[4])/a1,entryOK=(p-level)*dir>0&&entryDistance<=.45;
  if(opp==='MOMENTUM'||opp==='BREAKOUT'||opp==='BREAKOUT_RETEST'){
    const prior=m1.slice(-7,-1),microExtreme=dir===1?Math.min(...prior.map(b=>b[3])):Math.max(...prior.map(b=>b[2])),pullbackDepth=Math.abs(microExtreme-level);
@@ -123,8 +125,8 @@ function analyze(input){
  const stretch=Math.abs(p-e5)/a5,env=marketFeatures(m15,m5,m1,dir,p,e5,a5,a1);
  result.trade=trade;result.decision=dir===1?'BUY':'SELL';result.waitCode=null;
  if(m15.direction===dir)entryBasis.push('M15 متوافق مع اتجاه M5');else if(m15.direction===0)entryBasis.push('M15 محايد ولا يعاكس الصفقة');entryBasis.push('M1 أكد الدخول بدون مطاردة سعر');
- result.meta={atr:a1,m15:m15.label,m5:m5t.label,m1:'CONFIRMED',m15Strength:m15.strength,m5Strength:m5t.strength,stretch,side:dir===1?'BUY':'SELL',setup:result.opportunity,entryBasis,aiFeatures:{m15Align:m15.direction===dir?1:m15.direction===0?0:-1,m15Strength:m15.strength,m5Strength:m5t.strength,stretch,score:result.score/100,isPullback:result.opportunity==='PULLBACK'?1:0,isContinuation:result.opportunity==='CONTINUATION'?1:0,isMomentum:result.opportunity==='MOMENTUM'?1:0,isReentry:result.opportunity==='REENTRY'?1:0,isBreakout:result.opportunity==='BREAKOUT'?1:0,isBreakoutRetest:result.opportunity==='BREAKOUT_RETEST'?1:0,isFakeBreak:result.opportunity==='FAKE_BREAK'?1:0,isLiquiditySweep:result.opportunity==='LIQUIDITY_SWEEP'?1:0,isRangeRejection:result.opportunity==='RANGE_REJECTION'?1:0,isBTC:input?.symbol==='BTCUSD'?1:0,vol1:env.vol1,vol5:env.vol5,body1:env.body1,body5:env.body5,compression5:env.compression5,distanceEma:env.distanceEma,trendAge5:env.trendAge5,entryDistance}};
- result.why='SCALP '+result.opportunity+' • M15 سياق، M5 تنفيذ، M1 Trigger • '+result.score+'/100.';return result;
+ result.meta={atr:a1,m15:m15.label,m5:m5t.label,m1:'CONFIRMED',liveCandidate:true,m15Strength:m15.strength,m5Strength:m5t.strength,stretch,side:dir===1?'BUY':'SELL',setup:result.opportunity,entryBasis,aiFeatures:{m15Align:m15.direction===dir?1:m15.direction===0?0:-1,m15Strength:m15.strength,m5Strength:m5t.strength,stretch,score:result.score/100,isPullback:result.opportunity==='PULLBACK'?1:0,isContinuation:result.opportunity==='CONTINUATION'?1:0,isMomentum:result.opportunity==='MOMENTUM'?1:0,isReentry:result.opportunity==='REENTRY'?1:0,isBreakout:result.opportunity==='BREAKOUT'?1:0,isBreakoutRetest:result.opportunity==='BREAKOUT_RETEST'?1:0,isFakeBreak:result.opportunity==='FAKE_BREAK'?1:0,isLiquiditySweep:result.opportunity==='LIQUIDITY_SWEEP'?1:0,isRangeRejection:result.opportunity==='RANGE_REJECTION'?1:0,isBTC:input?.symbol==='BTCUSD'?1:0,vol1:env.vol1,vol5:env.vol5,body1:env.body1,body5:env.body5,compression5:env.compression5,distanceEma:env.distanceEma,trendAge5:env.trendAge5,entryDistance}};
+ result.why='SCALP '+result.opportunity+' • رصد حي على M5/M1 مع M15 كسياق • '+result.score+'/100.';return result;
 }
 return{TF,FRAMES,formatPrice,validBar,atr,ema,swings,trend,findPOI,continuation,momentum,breakout,breakoutRetest,fakeBreak,liquiditySweep,rangeRejection,detectStrategies,marketFeatures,analyze};
 });
