@@ -1,6 +1,6 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.MarketData=api;})(typeof globalThis==='object'?globalThis:this,function(){
 'use strict';
-const TF={H4:14400,H1:3600,M15:900,M5:300,M1:60};
+const TF={H4:14400,H1:3600,M15:900,M5:300,M3:180,M1:60};
 const number=v=>v===null||v===undefined||typeof v==='boolean'||String(v).trim()===''?NaN:Number(v);
 const positive=v=>Number.isFinite(v)&&v>0;
 function timestamp(v){if(v===null||v===undefined||v==='')return null;let n=Number(v);if(Number.isFinite(n))return n<1e11?n*1000:n;const t=Date.parse(v);return Number.isFinite(t)?t:NaN;}
