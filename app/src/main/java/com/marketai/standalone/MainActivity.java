@@ -16,6 +16,7 @@ import android.graphics.Insets;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 import android.webkit.WebChromeClient;
+import android.webkit.ValueCallback;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -30,6 +31,8 @@ public class MainActivity extends Activity {
     private String pendingText;
     private String pendingMime;
     private static final int EXPORT_REQUEST = 4107;
+    private static final int IMPORT_REQUEST = 4109;
+    private ValueCallback<Uri[]> pendingFileChooser;
     private static final int NOTIFICATION_PERMISSION_REQUEST = 4108;
     private static final String SIGNAL_CHANNEL = "market_ai_signals";
 
@@ -47,7 +50,7 @@ public class MainActivity extends Activity {
         s.setDomStorageEnabled(true);
         s.setLoadsImagesAutomatically(true);
         s.setAllowFileAccess(true);
-        s.setAllowContentAccess(false);
+        s.setAllowContentAccess(true);
         s.setAllowFileAccessFromFileURLs(true);
         s.setAllowUniversalAccessFromFileURLs(true);
         s.setCacheMode(WebSettings.LOAD_NO_CACHE);
@@ -56,7 +59,24 @@ public class MainActivity extends Activity {
 
         web.addJavascriptInterface(new ExportBridge(), "AndroidExport");
         web.addJavascriptInterface(new NotifyBridge(), "AndroidNotify");
-        web.setWebChromeClient(new WebChromeClient());
+        web.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView webView, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
+                if (pendingFileChooser != null) pendingFileChooser.onReceiveValue(null);
+                pendingFileChooser = filePathCallback;
+                Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
+                intent.setType("application/json");
+                try {
+                    startActivityForResult(intent, IMPORT_REQUEST);
+                    return true;
+                } catch (Exception e) {
+                    pendingFileChooser = null;
+                    Toast.makeText(MainActivity.this, "تعذر فتح مستعرض الملفات", Toast.LENGTH_SHORT).show();
+                    return false;
+                }
+            }
+        });
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
@@ -158,6 +178,15 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == IMPORT_REQUEST) {
+            if (pendingFileChooser != null) {
+                Uri[] result = null;
+                if (resultCode == RESULT_OK && data != null && data.getData() != null) result = new Uri[]{data.getData()};
+                pendingFileChooser.onReceiveValue(result);
+                pendingFileChooser = null;
+            }
+            return;
+        }
         if (requestCode != EXPORT_REQUEST) return;
         if (resultCode != RESULT_OK || data == null || data.getData() == null) {
             pendingText = null;
