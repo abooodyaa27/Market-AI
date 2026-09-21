@@ -9,3 +9,6 @@ UI test updated for V2.1 cold-start fail-closed semantics.
 V2.1 UI readiness test now waits on journal/AI state and preserves strict feed validation.
 
 Build trigger: latest V2.1 UI readiness fix.
+
+
+<!-- V2.9 build trigger: holdout fix + stable V2.8 signing key -->
