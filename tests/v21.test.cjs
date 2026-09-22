@@ -9,7 +9,7 @@ test('AI cold start is reduced but still requires temporal validation and test',
 
 test('trainer reserves larger independent validation and test windows',()=>{const rows=[];for(let i=0;i<40;i++)rows.push({id:'r'+i,parentId:'p'+i,at:i*100000,closedAt:i*100000+1000});const p=T.partition(rows);assert.equal(p.test.length,10);assert.ok(p.validation.length>=9);});
 
-test('live XAUUSD M15 tolerates a small provider hole but not stale or large gaps',()=>{const prev=Date.UTC(2026,8,22,9)/1000,last=prev+1800,now=(last+600)*1000;assert.equal(F.usableGap('XAUUSD','M15',1800,900,prev,now,last),'FEED');assert.equal(F.usableGap('XAUUSD','M15',5400,900,prev,now,last),'BAD');});
+test('derived XAUUSD M15 rejects intraday holes and accepts only real session gaps',()=>{const prev=Date.UTC(2026,8,22,9)/1000,last=prev+1800,now=(last+600)*1000;assert.equal(F.usableGap('XAUUSD','M15',1800,900,prev,now,last),'BAD');const sessionPrev=Date.UTC(2026,8,14,20,45)/1000;assert.equal(F.usableGap('XAUUSD','M15',4500,900,sessionPrev,now,last),'SESSION');});
 test('trainer searches temporal boundaries after embargo',()=>{const rows=[];for(let i=0;i<48;i++)rows.push({id:'e'+i,parentId:'e'+i,at:i*120000,closedAt:i*120000+70000});const p=T.partition(rows);assert.ok(p.train.length>=20);assert.ok(p.validation.length>=6);assert.ok(p.test.length>=6);});
 
 test('trainer calibration never promotes a negative predicted edge',()=>{const src=require('fs').readFileSync(require('path').join(__dirname,'../app/src/main/assets/trainer.js'),'utf8');assert.match(src,/\[0,\.025,\.05,\.1,\.2,\.3\]/);assert.doesNotMatch(src,/\[-\.5,-\.25/);});
