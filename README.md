@@ -32,3 +32,5 @@ Build trigger: latest V2.1 UI readiness fix.
 <!-- semantic M15 regression test rerun -->
 
 <!-- seventh-pass: derived M15 + atomic holdout validation -->
+
+<!-- canonical M1 root-cause feed fix -->
