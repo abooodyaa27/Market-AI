@@ -8,3 +8,6 @@ test('XAUUSD M15 accepts a real session break but rejects missing intraday candl
 test('AI cold start is reduced but still requires temporal validation and test',()=>{assert.equal(T.MIN_ROWS,40);assert.ok(T.MIN_TRAIN>=20);assert.ok(T.MIN_VALIDATION>=6);assert.ok(T.MIN_TEST>=6);assert.ok(T.MIN_TRADES>=2);});
 
 test('trainer reserves larger independent validation and test windows',()=>{const rows=[];for(let i=0;i<40;i++)rows.push({id:'r'+i,parentId:'p'+i,at:i*100000,closedAt:i*100000+1000});const p=T.partition(rows);assert.equal(p.test.length,10);assert.ok(p.validation.length>=9);});
+
+test('live XAUUSD M15 tolerates a small provider hole but not stale or large gaps',()=>{const prev=Date.UTC(2026,8,22,9)/1000,last=prev+1800,now=(last+600)*1000;assert.equal(F.usableGap('XAUUSD','M15',1800,900,prev,now,last),'FEED');assert.equal(F.usableGap('XAUUSD','M15',5400,900,prev,now,last),'BAD');});
+test('trainer searches temporal boundaries after embargo',()=>{const rows=[];for(let i=0;i<48;i++)rows.push({id:'e'+i,parentId:'e'+i,at:i*120000,closedAt:i*120000+70000});const p=T.partition(rows);assert.ok(p.train.length>=20);assert.ok(p.validation.length>=6);assert.ok(p.test.length>=6);});
