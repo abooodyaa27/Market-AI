@@ -24,13 +24,22 @@ function collect(rows,symbol,now=Infinity){
 function samples(rows,symbol){return collect(rows,symbol).rows;}
 function groups(rows){const map=new Map();for(const r of rows){const key=r.parentId??r.id;let g=map.get(key);if(!g){g={parentId:key,at:r.at,closedAt:r.closedAt,rows:[]};map.set(key,g);}g.rows.push(r);g.at=Math.min(g.at,r.at);g.closedAt=Math.max(g.closedAt,r.closedAt);}return [...map.values()].sort((a,b)=>a.at-b.at||a.parentId.localeCompare(b.parentId));}
 function partition(rows,evaluatedUntil=0){
- // Boundaries depend only on decision time, never profitability or trade count.
+ // Choose temporal boundaries after applying embargo so a valid dataset is not rejected
+ // merely because the nominal 50/25/25 cut purges one validation sample.
  const gs=groups(rows),times=[...new Set(gs.map(g=>g.at))],fresh=times.filter(t=>t>evaluatedUntil);
- const v=evaluatedUntil>0?fresh[0]:times[Math.floor(times.length*.5)],t=evaluatedUntil>0?fresh[Math.floor(fresh.length*.5)]:times[Math.floor(times.length*.75)];
- const p={train:[],validation:[],test:[],purged:0};if(v===undefined||t===undefined||t<=v)return p;
- for(const g of gs){const bucket=g.at<v?'train':g.at<t?'validation':'test',end=bucket==='train'?v:bucket==='validation'?t:Infinity;
-  for(const r of g.rows){if(r.closedAt>=end-EMBARGO)p.purged++;else p[bucket].push(r);}
- }return p;
+ const make=(v,t)=>{const p={train:[],validation:[],test:[],purged:0};if(v===undefined||t===undefined||t<=v)return p;
+  for(const g of gs){const bucket=g.at<v?'train':g.at<t?'validation':'test',end=bucket==='train'?v:bucket==='validation'?t:Infinity;
+   for(const r of g.rows){if(r.closedAt>=end-EMBARGO)p.purged++;else p[bucket].push(r);}
+  }return p;};
+ if(evaluatedUntil>0){const v=fresh[0],t=fresh[Math.floor(fresh.length*.5)];return make(v,t);}
+ let best=make(times[Math.floor(times.length*.5)],times[Math.floor(times.length*.75)]);
+ if(best.train.length>=MIN_TRAIN&&best.validation.length>=MIN_VALIDATION&&best.test.length>=MIN_TEST)return best;
+ for(let vi=MIN_TRAIN;vi<times.length;vi++)for(let ti=vi+MIN_VALIDATION;ti<times.length;ti++){
+  const p=make(times[vi],times[ti]);
+  if(p.train.length<MIN_TRAIN||p.validation.length<MIN_VALIDATION||p.test.length<MIN_TEST)continue;
+  if(!best||p.purged<best.purged)best=p;
+ }
+ return best;
 }
 function fit(rows){const size=rows[0].x.length+1,w={BUY:Array(size).fill(0),SELL:Array(size).fill(0)};for(let epoch=0;epoch<60;epoch++)for(const side of ['BUY','SELL']){const sr=rows.filter(r=>Number.isFinite(r.outcomes?.[side]));if(!sr.length)continue;const g=Array(size).fill(0);for(const r of sr){const x=[1,...r.x],err=E.predict(r.x,w[side])-Math.max(-3,Math.min(1,r.outcomes[side]));for(let j=0;j<size;j++)g[j]+=err*x[j]/sr.length;}for(let j=0;j<size;j++)w[side][j]-=.015*(g[j]+(j?.08*w[side][j]:0));}return w;}
 function metrics(rows,model,legacy=false){
