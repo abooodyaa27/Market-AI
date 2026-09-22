@@ -26,3 +26,5 @@ Build trigger: latest V2.1 UI readiness fix.
 <!-- rerun after M15 regression test correction -->
 
 <!-- corrected M15 assertion build -->
+
+<!-- M15 provider fetch removed at source -->
