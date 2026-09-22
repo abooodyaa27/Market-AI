@@ -5,3 +5,6 @@ test('rollover creates a new bucket, old synthetic bar stays unconfirmed',()=>{c
 test('an old quote cannot overwrite a newer candle',()=>{const a=[[180,12,14,11,13,true]];assert.deepEqual(D.patchLive(a,8,121000,'M1'),a);});
 test('normalization sorts and validates OHLC, excludes malformed candles',()=>{const result=D.normalizeBars({bars:[{openTime:'2026-01-01T00:00:00Z',open:10,high:12,low:9,close:11,isOpen:false},{openTime:'bad',open:1,high:2,low:0,close:1}]},'M1');assert.equal(result.length,1);assert.equal(result[0][4],11);});
 test('invalid quote data cannot become a zero price or a fresh signal',()=>{assert.equal(D.normalizeTick({mid:null},1000),null);assert.equal(D.normalizeTick({mid:'bad'},1000),null);assert.equal(D.normalizeTick({bid:100,ask:102},1000).price,101);});
+
+test('M15 is deterministically aggregated from three canonical M5 candles',()=>{const src=[[0,100,102,99,101,false,1],[300,101,104,100,103,false,2],[600,103,105,102,104,false,3],[900,104,106,103,105,false,4]];const r=D.aggregate(src,900,300);assert.equal(r.length,1);assert.deepEqual(r[0],[0,100,105,99,104,false,6]);});
+test('incomplete historical M15 bucket is rejected instead of fabricated',()=>{const src=[[0,100,102,99,101,false],[600,103,105,102,104,false]];assert.deepEqual(D.aggregate(src,900,300),[]);});
