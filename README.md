@@ -24,3 +24,5 @@ Build trigger: latest V2.1 UI readiness fix.
 <!-- build local M15 + validation calibration fix -->
 
 <!-- rerun after M15 regression test correction -->
+
+<!-- corrected M15 assertion build -->
