@@ -11,3 +11,6 @@ test('trainer reserves larger independent validation and test windows',()=>{cons
 
 test('live XAUUSD M15 tolerates a small provider hole but not stale or large gaps',()=>{const prev=Date.UTC(2026,8,22,9)/1000,last=prev+1800,now=(last+600)*1000;assert.equal(F.usableGap('XAUUSD','M15',1800,900,prev,now,last),'FEED');assert.equal(F.usableGap('XAUUSD','M15',5400,900,prev,now,last),'BAD');});
 test('trainer searches temporal boundaries after embargo',()=>{const rows=[];for(let i=0;i<48;i++)rows.push({id:'e'+i,parentId:'e'+i,at:i*120000,closedAt:i*120000+70000});const p=T.partition(rows);assert.ok(p.train.length>=20);assert.ok(p.validation.length>=6);assert.ok(p.test.length>=6);});
+
+test('trainer calibration includes thresholds that can produce validation trades from conservative scores',()=>{const src=require('fs').readFileSync(require('path').join(__dirname,'../app/src/main/assets/trainer.js'),'utf8');assert.match(src,/\[-\.5,-\.25,0,\.025,\.05,\.1,\.2,\.3\]/);});
+test('app derives M15 from M5 rather than trusting gappy provider M15',()=>{const src=require('fs').readFileSync(require('path').join(__dirname,'../app/src/main/assets/app.js'),'utf8');assert.doesNotMatch(src,/M15:'15m'/);assert.match(src,/D\.aggregate\(st\.bars\.M5\|\|\[\],900,300\)/);});
