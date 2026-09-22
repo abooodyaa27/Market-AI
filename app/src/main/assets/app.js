@@ -1,7 +1,7 @@
 'use strict';
 (async()=>{
 const A=window.MarketAnalysis,D=window.MarketData,R=window.RiskSafety,F=window.MarketFeatures,J=window.DecisionJournal,$=id=>document.getElementById(id);
-const symbols=['XAUUSD','BTCUSD'],frames=['M1','M3','M5','M15','H1','H4'],intervals={M1:'1m',M5:'5m',M15:'15m',H1:'1h',H4:'4h'};
+const symbols=['XAUUSD','BTCUSD'],frames=['M1','M3','M5','M15','H1','H4'],intervals={M1:'1m',M5:'5m',H1:'1h',H4:'4h'};
 const store=Object.fromEntries(symbols.map(s=>[s,{tick:null,bars:{},live:{},times:{},errors:{},tickBusy:false,barBusy:false,lastBars:0}]));
 let coordinator=null,journal=null,asset='XAUUSD',tf='M1',training=false,pollBusy=false,lastTrainingStatus={};
 try{asset=symbols.includes(localStorage.getItem('asset'))?localStorage.getItem('asset'):asset;tf=frames.includes(localStorage.getItem('tf'))?localStorage.getItem('tf'):tf;}catch{}
