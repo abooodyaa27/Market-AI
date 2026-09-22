@@ -20,3 +20,5 @@ Build trigger: latest V2.1 UI readiness fix.
 <!-- trigger corrected V3.0 gap validation build -->
 
 <!-- V3.0.2 M15 live gap + embargo split regression build -->
+
+<!-- build local M15 + validation calibration fix -->
