@@ -29,17 +29,33 @@ const {scenario,NOW}=require('./fixtures.cjs');
   for(const width of [320,390,430]){await page.setViewportSize({width,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}
   await page.locator('#goldTab').click();
   const imported=process.env.REAL_EXPORT?JSON.parse(fs.readFileSync(process.env.REAL_EXPORT,'utf8')):{version:2,decisions:require('./pipeline-fixtures.cjs').dataset()};
+  if(!process.env.REAL_EXPORT)Object.assign(imported.decisions[0].ai,{decision:'BUY',reason:'LEARNED_EDGE',modelId:'verified-fixture'});
   await page.locator('#importDecisionFile').setInputFiles({name:'journal.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(imported))});
   await page.waitForFunction(()=>document.getElementById('trainingStatus').textContent.includes('تم الاستيراد'));
+  assert.equal(await page.locator('#missTotal').innerText(),'0','an imported model claim is not locally verified');
   await page.locator('#trainModel').click();
-  const expected=process.env.REAL_EXPORT?'INSUFFICIENT_DATA':'PROMOTED';
+  const expected=process.env.REAL_EXPORT?'INSUFFICIENT_VALIDATION_TRADES':'PROMOTED';
   await page.waitForFunction(expected=>document.getElementById('trainingStatus').textContent.includes(expected),expected);
   assert.match(await page.locator('#trainingStatus').innerText(),/Train .*Validation .*Test/);
   if(process.env.REAL_EXPORT){assert.match(await page.locator('#aiSamples').innerText(),/48/);await page.locator('#btcTab').click();await page.locator('#trainModel').click();await page.waitForFunction(()=>document.getElementById('trainingStatus').textContent.includes('NO_PROVEN_IMPROVEMENT'));}
-  else {assert.equal(await page.locator('#aiMode').innerText(),'VALIDATED');}
+  else {
+   assert.equal(await page.locator('#aiMode').innerText(),'VALIDATED');
+   const {row}=require('./pipeline-fixtures.cjs'),blocked=row(101),observed=row(102);
+   for(const r of [blocked,observed])Object.assign(r.ai,{decision:'BUY',reason:'LEARNED_EDGE',modelId:'XAUUSD-'+NOW});
+   blocked.positions={};blocked.safety={ok:false,reasons:['SPREAD']};
+   observed.safety={ok:false,reasons:['DUPLICATE_BAR']};
+   await page.locator('#importDecisionFile').setInputFiles({name:'blocked.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({version:2,decisions:[blocked,observed]}))});
+   await page.waitForFunction(()=>document.getElementById('trainingStatus').textContent.includes('تم الاستيراد'));
+   assert.equal(await page.locator('#missTotal').innerText(),'2','tracked and unobserved blocked model choices both count');
+   assert.equal(await page.locator('#missWin').innerText(),'100%','only observed outcomes enter the win rate');
+   const csvDownload=page.waitForEvent('download');await page.locator('#exportAiCsv').click();
+   const csvFile=await csvDownload;const csvText=fs.readFileSync(await csvFile.path(),'utf8');
+   assert.match(csvText.split('\r\n')[0],/"entry"/,'a first unobserved opportunity cannot remove observed columns from CSV');
+  }
   await page.reload();
   await page.waitForFunction(()=>document.getElementById('journalStatus').textContent.includes('السجل متاح'));
   assert.match(await page.locator('#trainingStatus').innerText(),process.env.REAL_EXPORT?/NO_PROVEN_IMPROVEMENT/:/PROMOTED/);
+  if(!process.env.REAL_EXPORT)assert.equal(await page.locator('#missTotal').innerText(),'2','locally verified archived model survives reload');
   // Android file:// can reject Worker construction synchronously.
   await page.evaluate(()=>{window.Worker=class{constructor(){throw new Error('SecurityError');}};});
   await page.locator('#trainModel').click();
