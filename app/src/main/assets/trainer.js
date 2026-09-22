@@ -68,7 +68,7 @@ function train(raw,incumbent,{symbol,now=Date.now(),evaluatedUntil=0}={}){
  if(['BUY','SELL'].some(side=>!p.train.some(r=>Number.isFinite(r.outcomes[side]))))return{...base,reason:'MISSING_TRAIN_SIDE'};
  const weights=fit(p.train);
  if(!Object.values(weights).every(w=>w.every(v=>Number.isFinite(v)&&Math.abs(v)<100)))return{...base,stage:'TRAIN',reason:'UNSTABLE_MODEL'};
- const options=[-.5,-.25,0,.025,.05,.1,.2,.3].map(threshold=>({weights,threshold})),candidates=options.map(model=>({model,metrics:metrics(p.validation,model)}));
+ const options=[0,.025,.05,.1,.2,.3].map(threshold=>({weights,threshold})),candidates=options.map(model=>({model,metrics:metrics(p.validation,model)}));
  const eligible=candidates.filter(c=>c.metrics.trades>=MIN_TRADES).sort((a,b)=>b.metrics.lowerMean95-a.metrics.lowerMean95),chosen=eligible[0];
  // Persist the full attempted holdout watermark even after a failed validation/test.
  const until=Math.max(evaluatedUntil,...p.validation.concat(p.test).map(r=>r.closedAt));
