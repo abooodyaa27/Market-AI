@@ -1,11 +1,11 @@
-name: Build Market AI Scalp AI V3.0 APK
+name: Build Market AI Scalp AI V3.0.1 APK
 
 on:
   workflow_dispatch:
   pull_request:
-    branches: [ v3.0-build ]
+    branches: [ v3.0-build, v3.0-fix2-build ]
   push:
-    branches: [ v3.0-build ]
+    branches: [ v3.0-build, v3.0-fix2-build ]
 
 concurrency:
   group: market-ai-scalp-ai-v30-${{ github.ref }}
@@ -28,10 +28,10 @@ jobs:
       - name: Check JavaScript and analysis logic
         run: |
           for file in app/src/main/assets/*.js; do node --check "$file"; done
+          npm ci --ignore-scripts --no-audit --no-fund
           npm test
       - name: Install browser test tools
         run: |
-          npm install --ignore-scripts --no-audit --no-fund
           npx playwright install --with-deps chromium
       - name: Test mobile UI and BUY SELL WAIT flows
         run: npm run test:ui
@@ -53,24 +53,24 @@ jobs:
         run: gradle :app:assembleDebug :app:lintDebug --stacktrace
       - name: Verify APK
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk Market_AI_SCALP_AI_V3_0.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Market_AI_SCALP_AI_V3_0.apk
-          sha256sum Market_AI_SCALP_AI_V3_0.apk > Market_AI_SCALP_AI_V3_0.apk.sha256
+          cp app/build/outputs/apk/debug/app-debug.apk Market_AI_V3_0_1_fix3.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Market_AI_V3_0_1_fix3.apk
+          sha256sum Market_AI_V3_0_1_fix3.apk > Market_AI_V3_0_1_fix3.apk.sha256
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Market_AI_SCALP_AI_V3_0.apk
-          path: Market_AI_SCALP_AI_V3_0.apk
+          name: Market_AI_V3_0_1_fix3.apk
+          path: Market_AI_V3_0_1_fix3.apk
           if-no-files-found: error
           retention-days: 90
       - name: Upload validation reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SCALP_AI_V3_0-validation
+          name: SCALP_AI_V3_0_1-validation
           path: |
             test-results/
             app/build/reports/lint-results-debug.html
-            Market_AI_SCALP_AI_V3_0.apk.sha256
+            Market_AI_V3_0_1_fix3.apk.sha256
           if-no-files-found: ignore
           retention-days: 30

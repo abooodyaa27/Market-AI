@@ -31,10 +31,11 @@ function move(clientX,clientY){if(!geometry||!drag)return null;const dx=clientX-
 function end(clientX,clientY){clearTimeout(longTimer);if(tool==='HLINE'&&drag){const p=priceFromY(clientY);drawings.push({kind:'HLINE',tf:geometry.tf,p1:p});tool='NONE';}
  else if(tool==='TREND'&&drag){const i=idxFromX(clientX),p=priceFromY(clientY);if(!pendingTrend)pendingTrend={i1:geometry.start+i,p1:p};else{drawings.push({kind:'TREND',tf:geometry.tf,i1:pendingTrend.i1,p1:pendingTrend.p1,i2:geometry.start+i,p2:p});pendingTrend=null;tool='NONE';}}
  drag=null;edit=null;if(!longActive)cross=null;longActive=false;redraw();}
-function reset(){offset=0;cross=null;drag=null;redraw();}
+function cancel(){clearTimeout(longTimer);drag=null;edit=null;longActive=false;pendingTrend=null;cross=null;redraw();}
+function reset(){cancel();offset=0;cross=null;drag=null;redraw();}
 function setTool(name){tool=name;pendingTrend=null;cross=null;redraw();}
 function toggleEMA(){emaOn=!emaOn;redraw();return emaOn;} function setEMA(v){emaPeriods=[...new Set(v.map(Number).filter(n=>Number.isInteger(n)&&n>=2&&n<=500))].slice(0,6);if(!emaPeriods.length)emaPeriods=[9,21];emaOn=true;try{localStorage.setItem('marketEmaPeriods',JSON.stringify(emaPeriods));}catch{}redraw();} function getEMA(){try{const v=JSON.parse(localStorage.getItem('marketEmaPeriods')||'null');if(Array.isArray(v)&&v.length)emaPeriods=v;}catch{}return emaPeriods.slice();}
 function toggleRSI(){rsiOn=!rsiOn;redraw();return rsiOn;}
 function clearDrawings(){drawings=[];pendingTrend=null;redraw();}
 function state(){return{offset,cross:!!cross,tool,emaOn,rsiOn,drawings:drawings.length};}
-return {draw,begin,move,end,reset,setTool,toggleEMA,setEMA,getEMA,toggleRSI,clearDrawings,state};})();
+return {draw,begin,move,end,cancel,reset,setTool,toggleEMA,setEMA,getEMA,toggleRSI,clearDrawings,state};})();

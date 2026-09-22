@@ -1,10 +1,80 @@
 (function(root,f){const api=f(typeof module==='object'?require('./decision-engine'):root.AIDecision);if(typeof module==='object')module.exports=api;else root.ModelTrainer=api;})(globalThis,function(E){
 'use strict';
 const EMBARGO=60000,MIN_ROWS=40,MIN_TRADES=2,MIN_TRAIN=20,MIN_VALIDATION=6,MIN_TEST=6;
-function samples(rows,symbol){const out=[];for(const r of rows){if(r.symbol!==symbol||!r.snapshot?.ok||!Array.isArray(r.snapshot.x)||!r.snapshot.x.every(Number.isFinite))continue;for(const side of ['BUY','SELL']){const p=r.positions?.[side];if(!p||p.status==='OPEN'||p.status==='CENSORED'||!Number.isFinite(p.r)||!Number.isFinite(p.closedAt))continue;out.push({id:r.id+'|'+side,parentId:r.id,side,at:r.at,closedAt:p.closedAt,closedAtBySide:{[side]:p.closedAt},schema:r.snapshot.schema,x:r.snapshot.x,names:r.snapshot.names,legacySide:r.legacySide===side?side:'WAIT',outcomes:{[side]:p.r}});}}return out.sort((a,b)=>a.at-b.at||a.id.localeCompare(b.id));}
-function partition(rows){const groups=[];for(const r of [...rows].sort((a,b)=>a.at-b.at||a.id.localeCompare(b.id))){let g=groups.at(-1);if(!g||g.parentId!==r.parentId){g={parentId:r.parentId,at:r.at,rows:[]};groups.push(g);}g.rows.push(r);}const vg=Math.floor(groups.length*.5),tg=Math.floor(groups.length*.75);if(!groups[vg]||!groups[tg])return{train:[],validation:[],test:[]};const flat=gs=>gs.flatMap(g=>g.rows);return{train:flat(groups.slice(0,vg)).filter(r=>r.closedAt<groups[vg].at-EMBARGO),validation:flat(groups.slice(vg,tg)).filter(r=>r.closedAt<groups[tg].at-EMBARGO),test:flat(groups.slice(tg))};}
+const terminal=new Set(['TP1','SL','EXPIRED']);
+function collect(rows,symbol,now=Infinity){
+ const out=[],excluded={},seen=new Set();let decisions=0;
+ const skip=k=>excluded[k]=(excluded[k]||0)+1;
+ for(const r of [...rows].filter(r=>r&&r.symbol===symbol).sort((a,b)=>a.at-b.at||String(a.id).localeCompare(String(b.id)))){
+  decisions++;const s=r.snapshot;
+  if(typeof r.id!=='string'||!Number.isFinite(r.at)||!s?.ok||typeof s.schema!=='string'||!Array.isArray(s.x)||!s.x.length||!s.x.every(Number.isFinite)||!Array.isArray(s.names)||s.names.length!==s.x.length||!s.names.every(n=>typeof n==='string')){skip('INVALID_SNAPSHOT');continue;}
+  const parentId=symbol+'|'+(s.bar??r.at);
+  for(const side of ['BUY','SELL']){
+   const p=r.positions?.[side];if(!p){skip('NO_POSITION');continue;}
+   if(p.observationGaps>0||p.status==='CENSORED'){skip('OBSERVATION_GAP');continue;}
+   if(p.status==='OPEN'){skip('OPEN');continue;}
+   if(!terminal.has(p.status)||!Number.isFinite(p.r)||!Number.isFinite(p.closedAt)||p.closedAt<r.at||p.closedAt<(p.openedAt??r.at)){skip('INVALID_OUTCOME');continue;}
+   if(p.closedAt>=now){skip('FUTURE_OUTCOME');continue;}
+   const id=parentId+'|'+side;if(seen.has(id)){skip('DUPLICATE_SNAPSHOT');continue;}seen.add(id);
+   out.push({id,parentId,sourceId:r.id,side,at:r.at,closedAt:p.closedAt,closedAtBySide:{[side]:p.closedAt},schema:s.schema,x:s.x,names:s.names,legacySide:r.legacySide===side?side:'WAIT',outcomes:{[side]:p.r}});
+  }
+ }
+ return{rows:out.sort((a,b)=>a.at-b.at||a.id.localeCompare(b.id)),decisions,excluded};
+}
+function samples(rows,symbol){return collect(rows,symbol).rows;}
+function groups(rows){const map=new Map();for(const r of rows){const key=r.parentId??r.id;let g=map.get(key);if(!g){g={parentId:key,at:r.at,closedAt:r.closedAt,rows:[]};map.set(key,g);}g.rows.push(r);g.at=Math.min(g.at,r.at);g.closedAt=Math.max(g.closedAt,r.closedAt);}return [...map.values()].sort((a,b)=>a.at-b.at||a.parentId.localeCompare(b.parentId));}
+function partition(rows,evaluatedUntil=0){
+ // Boundaries depend only on decision time, never profitability or trade count.
+ const gs=groups(rows),times=[...new Set(gs.map(g=>g.at))],fresh=times.filter(t=>t>evaluatedUntil);
+ const v=evaluatedUntil>0?fresh[0]:times[Math.floor(times.length*.5)],t=evaluatedUntil>0?fresh[Math.floor(fresh.length*.5)]:times[Math.floor(times.length*.75)];
+ const p={train:[],validation:[],test:[],purged:0};if(v===undefined||t===undefined||t<=v)return p;
+ for(const g of gs){const bucket=g.at<v?'train':g.at<t?'validation':'test',end=bucket==='train'?v:bucket==='validation'?t:Infinity;
+  for(const r of g.rows){if(r.closedAt>=end-EMBARGO)p.purged++;else p[bucket].push(r);}
+ }return p;
+}
 function fit(rows){const size=rows[0].x.length+1,w={BUY:Array(size).fill(0),SELL:Array(size).fill(0)};for(let epoch=0;epoch<60;epoch++)for(const side of ['BUY','SELL']){const sr=rows.filter(r=>Number.isFinite(r.outcomes?.[side]));if(!sr.length)continue;const g=Array(size).fill(0);for(const r of sr){const x=[1,...r.x],err=E.predict(r.x,w[side])-Math.max(-3,Math.min(1,r.outcomes[side]));for(let j=0;j<size;j++)g[j]+=err*x[j]/sr.length;}for(let j=0;j<size;j++)w[side][j]-=.015*(g[j]+(j?.08*w[side][j]:0));}return w;}
-function metrics(rows,model,legacy=false){let balance=0,peak=0,dd=0,busyUntil=-Infinity;const values=[];for(const r of rows){if(r.at<=busyUntil)continue;let side='WAIT';if(legacy)side=r.legacySide;else if(model){const u={BUY:E.predict(r.x,model.weights.BUY),SELL:E.predict(r.x,model.weights.SELL)};side=u.BUY>=u.SELL?'BUY':'SELL';if(u[side]<model.threshold||Math.abs(u.BUY-u.SELL)<.05)side='WAIT';}if(!['BUY','SELL'].includes(side))continue;const value=r.outcomes?.[side];if(!Number.isFinite(value))continue;values.push(value);balance+=value;peak=Math.max(peak,balance);dd=Math.max(dd,peak-balance);busyUntil=r.closedAtBySide?.[side]??r.closedAt;}const n=values.length,mean=n?balance/n:0,variance=n>1?values.reduce((s,x)=>s+(x-mean)**2,0)/(n-1):0;return{trades:n,meanR:mean,totalR:balance,maxDrawdownR:dd,winRate:n?values.filter(v=>v>0).length/n:0,lowerMean95:n?mean-1.96*Math.sqrt(variance/n):0,profitFactor:values.some(x=>x<0)?values.filter(x=>x>0).reduce((a,b)=>a+b,0)/-values.filter(x=>x<0).reduce((a,b)=>a+b,0):null};}
-function better(a,b,legacy){return a.trades>=MIN_TRADES&&a.lowerMean95>0&&a.meanR>b.meanR+.02&&a.totalR>b.totalR&&a.maxDrawdownR<=Math.max(8,b.maxDrawdownR+1)&&a.meanR>legacy.meanR&&a.totalR>legacy.totalR;}
-function train(raw,incumbent,{symbol,now=Date.now(),evaluatedUntil=0}={}){const all=samples(raw,symbol).filter(r=>r.closedAt<now),freshParents=new Set(all.filter(r=>r.at>evaluatedUntil).map(r=>r.parentId));let rows=all;if(evaluatedUntil>0){const freshGroups=Math.max(0,freshParents.size);if(freshGroups<10)return{runId:symbol+'-'+now,promoted:false,reason:'NEED_NEW_HOLDOUT',evaluatedUntil,newHoldoutGroups:freshGroups};const cut=Math.max(0,all.findIndex(r=>freshParents.has(r.parentId))-Math.ceil(all.length*.6));rows=all.slice(cut);}const p=partition(rows),base={runId:symbol+'-'+now,promoted:false,reason:'INSUFFICIENT_DATA',evaluatedUntil};if(rows.length<MIN_ROWS||p.train.length<MIN_TRAIN||p.validation.length<MIN_VALIDATION||p.test.length<MIN_TEST)return base;const dim=p.train[0].x.length,schema=p.train[0].schema;if(rows.some(r=>r.x.length!==dim||r.schema!==schema)||new Set(rows.map(r=>r.id)).size!==rows.length)return{...base,reason:'INVALID_DATASET'};const weights=fit(p.train),options=[.05,.1,.2,.3].map(threshold=>({weights,threshold}));let chosen=null,validation=null;for(const m of options){const v=metrics(p.validation,m);if(v.trades>=MIN_TRADES&&(!validation||v.lowerMean95>validation.lowerMean95)){chosen=m;validation=v;}}const until=Math.max(...p.test.map(r=>r.closedAt));if(!chosen)return{...base,reason:'INSUFFICIENT_VALIDATION_TRADES'};const test=metrics(p.test,chosen);if(test.trades<MIN_TRADES)return{...base,reason:'INSUFFICIENT_TEST_TRADES',evidence:{counts:{train:p.train.length,validation:p.validation.length,test:p.test.length},validation,test},evaluatedUntil:until};const oldVal=metrics(p.validation,incumbent),oldTest=metrics(p.test,incumbent),legacyVal=metrics(p.validation,null,true),legacyTest=metrics(p.test,null,true);const enoughTest=test.trades>=MIN_TRADES;const promoted=enoughTest&&better(validation,oldVal,legacyVal)&&better(test,oldTest,legacyTest);const evidence={incumbentId:incumbent?.id||'WAIT_COLD_START',baseline:'V1.9 rules evaluated on same closed-bar snapshots',counts:{train:p.train.length,validation:p.validation.length,test:p.test.length},validation,test,incumbent:{validation:oldVal,test:oldTest},legacy:{validation:legacyVal,test:legacyTest},embargoMs:EMBARGO,trainEnd:Math.max(...p.train.map(r=>r.closedAt)),validationStart:p.validation[0].at,testStart:p.test[0].at,testEnd:until};const model=promoted?{...chosen,id:symbol+'-'+now,symbol,schema,validated:true,trainedUntil:evidence.trainEnd,testedUntil:until,confidenceKind:'edge_score_not_probability',evidence}:null;return{runId:base.runId,promoted,reason:promoted?'PROMOTED':!enoughTest?'INSUFFICIENT_TEST_TRADES':'NO_PROVEN_IMPROVEMENT',model,evidence,evaluatedUntil:until};}
-return{samples,partition,fit,metrics,train,MIN_ROWS,MIN_TRADES,MIN_TRAIN,MIN_VALIDATION,MIN_TEST};});
+function metrics(rows,model,legacy=false){
+ let balance=0,peak=0,dd=0,busyUntil=-Infinity,wait=0,overlap=0,missingOutcome=0;const values=[],gs=groups(rows);
+ for(const g of gs){if(g.at<=busyUntil){overlap++;continue;}const r=g.rows[0];let side='WAIT';
+  if(legacy)side=g.rows.find(r=>r.legacySide!=='WAIT')?.legacySide||'WAIT';
+  else if(model){const u={BUY:E.predict(r.x,model.weights.BUY),SELL:E.predict(r.x,model.weights.SELL)};side=u.BUY>=u.SELL?'BUY':'SELL';if(!Number.isFinite(u[side])||u[side]<model.threshold||Math.abs(u.BUY-u.SELL)<.05)side='WAIT';}
+  if(!['BUY','SELL'].includes(side)){wait++;continue;}
+  const outcome=g.rows.find(r=>Number.isFinite(r.outcomes?.[side]));if(!outcome){missingOutcome++;busyUntil=g.closedAt;continue;}
+  const value=outcome.outcomes[side];values.push(value);balance+=value;peak=Math.max(peak,balance);dd=Math.max(dd,peak-balance);busyUntil=outcome.closedAtBySide?.[side]??outcome.closedAt;
+ }
+ const n=values.length,mean=n?balance/n:0,variance=n>1?values.reduce((s,x)=>s+(x-mean)**2,0)/(n-1):0;
+ return{groups:gs.length,trades:n,wait,overlap,missingOutcome,meanR:mean,totalR:balance,maxDrawdownR:dd,winRate:n?values.filter(v=>v>0).length/n:0,lowerMean95:n?mean-1.96*Math.sqrt(variance/n):0,profitFactor:values.some(x=>x<0)?values.filter(x=>x>0).reduce((a,b)=>a+b,0)/-values.filter(x=>x<0).reduce((a,b)=>a+b,0):null};
+}
+function better(a,b,legacy){return a.trades>=MIN_TRADES&&a.missingOutcome===0&&b.missingOutcome===0&&legacy.missingOutcome===0&&a.lowerMean95>0&&a.meanR>b.meanR+.02&&a.totalR>b.totalR&&a.maxDrawdownR<=Math.max(8,b.maxDrawdownR+1)&&a.meanR>legacy.meanR&&a.totalR>legacy.totalR;}
+function train(raw,incumbent,{symbol,now=Date.now(),evaluatedUntil=0}={}){
+ if(incumbent?.dataPolicy!=='observed-contiguous-v1')incumbent=null;
+ const c=collect(raw,symbol,now),all=c.rows,p=partition(all,evaluatedUntil),fresh=groups(all).filter(g=>g.at>evaluatedUntil).length;
+ const counts={train:p.train.length,validation:p.validation.length,test:p.test.length},diagnostics={decisions:c.decisions,samples:all.length,groups:groups(all).length,excluded:c.excluded,purged:p.purged,newHoldoutGroups:fresh,counts,deficits:{samples:Math.max(0,MIN_ROWS-all.length),train:Math.max(0,MIN_TRAIN-counts.train),validation:Math.max(0,MIN_VALIDATION-counts.validation),test:Math.max(0,MIN_TEST-counts.test)}};
+ const base={runId:symbol+'-'+now,promoted:false,stage:'SAMPLES',reason:'INSUFFICIENT_DATA',evaluatedUntil,diagnostics};
+ if(evaluatedUntil>0&&fresh<10)return{...base,reason:'NEED_NEW_HOLDOUT'};
+ if(Object.values(diagnostics.deficits).some(n=>n>0))return base;
+ const dim=p.train[0].x.length,schema=p.train[0].schema,names=JSON.stringify(p.train[0].names);
+ if(all.some(r=>r.x.length!==dim||r.schema!==schema||JSON.stringify(r.names)!==names))return{...base,reason:'INVALID_DATASET'};
+ // Each side needs real training labels; never infer an unseen side from zero weights.
+ if(['BUY','SELL'].some(side=>!p.train.some(r=>Number.isFinite(r.outcomes[side]))))return{...base,reason:'MISSING_TRAIN_SIDE'};
+ const weights=fit(p.train);
+ if(!Object.values(weights).every(w=>w.every(v=>Number.isFinite(v)&&Math.abs(v)<100)))return{...base,stage:'TRAIN',reason:'UNSTABLE_MODEL'};
+ const options=[.05,.1,.2,.3].map(threshold=>({weights,threshold})),candidates=options.map(model=>({model,metrics:metrics(p.validation,model)}));
+ const eligible=candidates.filter(c=>c.metrics.trades>=MIN_TRADES).sort((a,b)=>b.metrics.lowerMean95-a.metrics.lowerMean95),chosen=eligible[0];
+ // Persist the full attempted holdout watermark even after a failed validation/test.
+ const until=Math.max(evaluatedUntil,...p.validation.concat(p.test).map(r=>r.closedAt));
+ const evidence={counts,embargoMs:EMBARGO,trainEnd:Math.max(...p.train.map(r=>r.closedAt)),validationStart:p.validation[0].at,testStart:p.test[0].at,testEnd:until,validationCandidates:candidates.map(c=>({threshold:c.model.threshold,...c.metrics})),validation:chosen?.metrics||candidates[0].metrics,test:null};
+ const trained={...base,stage:'VALIDATION',evaluatedUntil:until,evidence};
+ if(!chosen)return{...trained,reason:'INSUFFICIENT_VALIDATION_TRADES'};
+ const test=metrics(p.test,chosen.model);evidence.test=test;
+ if(test.trades<MIN_TRADES)return{...trained,stage:'TEST',reason:'INSUFFICIENT_TEST_TRADES'};
+ if(incumbent&&(incumbent.schema!==schema||incumbent.symbol!==symbol||!['BUY','SELL'].every(s=>Array.isArray(incumbent.weights?.[s])&&incumbent.weights[s].length===dim+1)))return{...trained,reason:'INVALID_INCUMBENT'};
+ const oldVal=metrics(p.validation,incumbent),oldTest=metrics(p.test,incumbent),legacyVal=metrics(p.validation,null,true),legacyTest=metrics(p.test,null,true);
+ Object.assign(evidence,{incumbentId:incumbent?.id||'WAIT_COLD_START',baseline:'V1.9 rules on identical closed-bar snapshots',incumbent:{validation:oldVal,test:oldTest},legacy:{validation:legacyVal,test:legacyTest}});
+ const promoted=better(chosen.metrics,oldVal,legacyVal)&&better(test,oldTest,legacyTest);
+ const model=promoted?{...chosen.model,id:symbol+'-'+now,symbol,schema,dataPolicy:'observed-contiguous-v1',validated:true,trainedUntil:evidence.trainEnd,testedUntil:until,confidenceKind:'edge_score_not_probability',evidence}:null;
+ return{...trained,stage:'PROMOTION',promoted,reason:promoted?'PROMOTED':'NO_PROVEN_IMPROVEMENT',model};
+}
+function describe(r){const d=r.diagnostics,c=d?.counts,e=r.evidence,labels={INSUFFICIENT_DATA:'العينات الصالحة بعد الفصل الزمني غير كافية',NEED_NEW_HOLDOUT:'يلزم سجل جديد لم يُستخدم سابقًا في التحقق والاختبار',INSUFFICIENT_VALIDATION_TRADES:'تم التدريب؛ فرص التحقق المقبولة غير كافية',INSUFFICIENT_TEST_TRADES:'تم التدريب والتحقق؛ صفقات الاختبار غير كافية',NO_PROVEN_IMPROVEMENT:'تم التدريب والاختبار؛ لم تثبت أفضلية تسمح بالترقية',PROMOTED:'اجتاز النموذج التحقق والاختبار وتم اعتماده'};return[labels[r.reason]||r.reason,r.reason,c?'Train '+c.train+' / Validation '+c.validation+' / Test '+c.test:'',d?'صالحة '+d.samples+' • مستبعدة لفجوات الرصد '+(d.excluded.OBSERVATION_GAP||0)+' • فصل زمني '+d.purged:'',e?.validation?'Validation: '+e.validation.trades+' صفقات • WAIT '+e.validation.wait+' • تداخل '+e.validation.overlap+' • نتيجة مفقودة '+e.validation.missingOutcome:'',e?.test?'Test: '+e.test.trades+' صفقات • WAIT '+e.test.wait+' • تداخل '+e.test.overlap+' • نتيجة مفقودة '+e.test.missingOutcome+' • '+e.test.meanR.toFixed(3)+'R':''].filter(Boolean).join(' • ');}
+return{samples,collect,partition,fit,metrics,train,describe,MIN_ROWS,MIN_TRADES,MIN_TRAIN,MIN_VALIDATION,MIN_TEST};
+});

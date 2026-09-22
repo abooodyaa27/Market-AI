@@ -6,10 +6,10 @@ const {scenario,NOW}=require('./fixtures.cjs');
  const root=path.resolve('app/src/main/assets');
  const server=http.createServer((req,res)=>{const file=path.join(root,req.url==='/'?'index.html':req.url.split('?')[0]);if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}fs.readFile(file,(e,data)=>{if(e){res.writeHead(404).end();return;}res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':'text/html');res.end(data);});});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
- const browser=await chromium.launch({headless:true});let failures=[];
+ const browser=await chromium.launch({headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH,args:['--no-sandbox']}: {})});let failures=[];
  try{
   const context=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:2});
-  await context.addInitScript(({now})=>{const NativeDate=Date;window.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}};indexedDB.deleteDatabase('market-ai-v2');},{now:NOW});
+  await context.addInitScript(({now})=>{const NativeDate=Date;window.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:[now]));}static now(){return now;}};},{now:NOW});
   await context.route('https://biquote.io/api/**',async route=>{const u=new URL(route.request().url()),parts=u.pathname.split('/'),symbol=parts[2],s=scenario(symbol,symbol==='BTCUSD');if(!parts[3]){const spread=symbol==='XAUUSD'?.08:2;return route.fulfill({json:{bid:s.tick.price-spread/2,ask:s.tick.price+spread/2,mid:s.tick.price,timestamp:NOW,marketState:'OPEN'}});}const tf={'1m':'M1','5m':'M5','15m':'M15','1h':'M15','4h':'M15'}[u.searchParams.get('interval')];await route.fulfill({json:{bars:s.bars[tf].map(([t,o,h,l,c,isOpen])=>({openTime:new Date(t*1000).toISOString(),open:o,high:h,low:l,close:c,isOpen}))}});});
   const page=await context.newPage();page.on('pageerror',e=>failures.push(e.message));
   await page.goto('http://127.0.0.1:'+server.address().port);
@@ -27,7 +27,24 @@ const {scenario,NOW}=require('./fixtures.cjs');
   await page.locator('#btcTab').click();await page.waitForFunction(()=>document.getElementById('symbol').textContent==='BTCUSD');
   assert.equal(await page.locator('#decision').innerText(),'WAIT');
   for(const width of [320,390,430]){await page.setViewportSize({width,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}
+  await page.locator('#goldTab').click();
+  const imported=process.env.REAL_EXPORT?JSON.parse(fs.readFileSync(process.env.REAL_EXPORT,'utf8')):{version:2,decisions:require('./pipeline-fixtures.cjs').dataset()};
+  await page.locator('#importDecisionFile').setInputFiles({name:'journal.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(imported))});
+  await page.waitForFunction(()=>document.getElementById('trainingStatus').textContent.includes('تم الاستيراد'));
+  await page.locator('#trainModel').click();
+  const expected=process.env.REAL_EXPORT?'INSUFFICIENT_DATA':'PROMOTED';
+  await page.waitForFunction(expected=>document.getElementById('trainingStatus').textContent.includes(expected),expected);
+  assert.match(await page.locator('#trainingStatus').innerText(),/Train .*Validation .*Test/);
+  if(process.env.REAL_EXPORT){assert.match(await page.locator('#aiSamples').innerText(),/48/);await page.locator('#btcTab').click();await page.locator('#trainModel').click();await page.waitForFunction(()=>document.getElementById('trainingStatus').textContent.includes('NO_PROVEN_IMPROVEMENT'));}
+  else {assert.equal(await page.locator('#aiMode').innerText(),'VALIDATED');}
+  await page.reload();
+  await page.waitForFunction(()=>document.getElementById('journalStatus').textContent.includes('السجل متاح'));
+  assert.match(await page.locator('#trainingStatus').innerText(),process.env.REAL_EXPORT?/NO_PROVEN_IMPROVEMENT/:/PROMOTED/);
+  // Android file:// can reject Worker construction synchronously.
+  await page.evaluate(()=>{window.Worker=class{constructor(){throw new Error('SecurityError');}};});
+  await page.locator('#trainModel').click();
+  await page.waitForFunction(()=>document.getElementById('trainingStatus').textContent.includes('NEED_NEW_HOLDOUT'));
   fs.mkdirSync('test-results',{recursive:true});await page.screenshot({path:'test-results/scalp-mobile-v21.png',fullPage:true});
-  assert.deepEqual(failures,[]);console.log('PASS: V2.1 cold-start WAIT + six frames + safety/journal controls + responsive UI.');
+  assert.deepEqual(failures,[]);console.log('PASS: cold-start WAIT, import, training/holdout, worker fallback, reload persistence, six frames and responsive UI.');
  }finally{await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});
