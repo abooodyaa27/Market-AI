@@ -1,4 +1,4 @@
-name: Build Market AI Scalp AI V3.0.4 APK
+name: Build Market AI Scalp AI V3.0.5 APK
 
 on:
   workflow_dispatch:
@@ -53,24 +53,24 @@ jobs:
         run: gradle :app:assembleDebug :app:lintDebug --stacktrace
       - name: Verify APK
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk Market_AI_V3_0_4_QuotaAndGap.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Market_AI_V3_0_4_QuotaAndGap.apk
-          sha256sum Market_AI_V3_0_4_QuotaAndGap.apk > Market_AI_V3_0_4_QuotaAndGap.apk.sha256
+          cp app/build/outputs/apk/debug/app-debug.apk Market_AI_V3_0_5_LiveAndData.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose Market_AI_V3_0_5_LiveAndData.apk
+          sha256sum Market_AI_V3_0_5_LiveAndData.apk > Market_AI_V3_0_5_LiveAndData.apk.sha256
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Market_AI_V3_0_4_QuotaAndGap.apk
-          path: Market_AI_V3_0_4_QuotaAndGap.apk
+          name: Market_AI_V3_0_5_LiveAndData.apk
+          path: Market_AI_V3_0_5_LiveAndData.apk
           if-no-files-found: error
           retention-days: 90
       - name: Upload validation reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SCALP_AI_V3_0_4-validation
+          name: SCALP_AI_V3_0_5-validation
           path: |
             test-results/
             app/build/reports/lint-results-debug.html
-            Market_AI_V3_0_4_QuotaAndGap.apk.sha256
+            Market_AI_V3_0_5_LiveAndData.apk.sha256
           if-no-files-found: ignore
           retention-days: 30

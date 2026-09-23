@@ -4,7 +4,7 @@ const {chromium}=require('playwright');
 const {scenario,NOW}=require('./fixtures.cjs');
 (async()=>{
  const root=path.resolve('app/src/main/assets');
- const server=http.createServer((req,res)=>{const file=path.join(root,req.url==='/'?'index.html':req.url.split('?')[0]);if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}fs.readFile(file,(e,data)=>{if(e){res.writeHead(404).end();return;}res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':'text/html');res.end(data);});});
+ const server=http.createServer((req,res)=>{if(req.url==='/vendor/signalr.min.js'){res.setHeader('Content-Type','application/javascript');res.end('window.signalR=undefined;');return;}const file=path.join(root,req.url==='/'?'index.html':req.url.split('?')[0]);if(!file.startsWith(root+path.sep)){res.writeHead(403).end();return;}fs.readFile(file,(e,data)=>{if(e){res.writeHead(404).end();return;}res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':'text/html');res.end(data);});});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const browser=await chromium.launch({headless:true,...(process.env.CHROME_PATH?{executablePath:process.env.CHROME_PATH,args:['--no-sandbox']}: {})});let failures=[];
  try{
@@ -22,8 +22,9 @@ const {scenario,NOW}=require('./fixtures.cjs');
   for(const name of ['M1','M3','M5','M15','H1','H4'])assert.equal(await page.getByRole('button',{name,exact:true}).count(),1);
   for(const id of ['stTp2','chartNow','missedHistory','toolTrend','toolRay','toolEma','toolRsi','exportAiCsv','exportDecisions','trainModel','decisionHistory'])assert.equal(await page.locator('#'+id).count(),1);
   assert.match(await page.locator('#journalStatus').innerText(),/السجل متاح/);
-  // The fixture deliberately reuses M15 for H1/H4; V2.1 correctly rejects misaligned higher-TF bars rather than pretending the feed is LIVE.
-  assert.match(await page.locator('#feed').innerText(),/UNSAFE|CONNECTING/);
+  // The price feed can be live while invalid H1/H4 history still forces AI WAIT.
+  assert.match(await page.locator('#feed').innerText(),/LIVE/);
+  assert.equal(await page.locator('#decision').innerText(),'WAIT');
   await page.locator('#btcTab').click();await page.waitForFunction(()=>document.getElementById('symbol').textContent==='BTCUSD');
   assert.equal(await page.locator('#decision').innerText(),'WAIT');
   for(const width of [320,390,430]){await page.setViewportSize({width,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}

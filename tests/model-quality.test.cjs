@@ -1,5 +1,10 @@
 const test=require('node:test'),assert=require('node:assert/strict');
 const T=require('../app/src/main/assets/trainer'),F=require('../app/src/main/assets/features');
+test('actual validation rejection says how many independent resolved trades are still needed',()=>{
+ const text=T.describe({reason:'INSUFFICIENT_VALIDATION_TRADES',diagnostics:{samples:48,counts:{train:23,validation:11,test:10},excluded:{OBSERVATION_GAP:59},purged:4},evidence:{validation:{trades:1,wait:0,negativeEdge:0,belowThreshold:0,ambiguous:0,overlap:4,missingOutcome:1}}});
+ assert.match(text,/Validation: 1\/2/);
+ assert.match(text,/نتيجة مفقودة 1/);
+});
 const start=Date.UTC(2026,8,14,10);
 const dataset=(n=100)=>Array.from({length:n},(_,i)=>{const at=start+i*180000;return{id:'d'+i,symbol:'XAUUSD',at,snapshot:{ok:true,schema:F.VERSION,bar:at,x:[0],names:['test']},legacySide:'WAIT',positions:{BUY:{side:'BUY',status:'TP1',r:.73,openedAt:at,closedAt:at+10000},SELL:{side:'SELL',status:'SL',r:-1.02,openedAt:at,closedAt:at+10000}}};});
 
