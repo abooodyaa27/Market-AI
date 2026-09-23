@@ -14,6 +14,7 @@ const {scenario,NOW}=require('./fixtures.cjs');
   const page=await context.newPage();page.on('pageerror',e=>failures.push(e.message));
   await page.goto('http://127.0.0.1:'+server.address().port);
   await page.waitForFunction(()=>document.getElementById('journalStatus').textContent.includes('السجل متاح'),{timeout:30000});
+  await page.waitForFunction(()=>document.getElementById('price').textContent!=='—',{timeout:30000});
   await page.waitForFunction(()=>document.getElementById('decision').textContent==='WAIT',{timeout:30000});
   // V2.1 is deliberately fail-closed: with no validated model, cold start MUST be WAIT.
   assert.equal(await page.locator('#decision').innerText(),'WAIT');
