@@ -21,7 +21,7 @@ const {scenario,NOW}=require('./fixtures.cjs');
   assert.equal(await page.locator('#aiMode').innerText(),'COLLECTING');
   assert.match(await page.locator('#aiReason').innerText(),/ليست نسبة نجاح/);
   for(const name of ['M1','M3','M5','M15','H1','H4'])assert.equal(await page.getByRole('button',{name,exact:true}).count(),1);
-  for(const id of ['stTp2','chartNow','missedHistory','toolTrend','toolRay','toolEma','toolRsi','exportAiCsv','exportDecisions','trainModel','decisionHistory'])assert.equal(await page.locator('#'+id).count(),1);
+  for(const id of ['stTp2','chartNow','missedHistory','toolTrend','toolRay','toolEma','toolRsi','exportAiCsv','exportDecisions','trainModel','decisionHistory','paperProgress','holdoutProgress','paperHistory'])assert.equal(await page.locator('#'+id).count(),1);
   assert.match(await page.locator('#journalStatus').innerText(),/السجل متاح/);
   // The price feed can be live while invalid H1/H4 history still forces AI WAIT.
   assert.match(await page.locator('#feed').innerText(),/LIVE/);
