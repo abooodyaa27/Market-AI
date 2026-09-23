@@ -1,0 +1,5 @@
+const start=Date.UTC(2026,8,14,10),F=require('../app/src/main/assets/features');
+function input(now=start+101*180000){const bars={};for(const [tf,sec] of Object.entries(F.TF)){const end=Math.floor(now/1000/sec)*sec;bars[tf]=Array.from({length:90},(_,i)=>[end-(90-i)*sec,100,101,99.5,100.25,false]);}return{symbol:'XAUUSD',now,bars,tick:{price:100.25,bid:100.2,ask:100.3,sourceAt:now,receivedAt:now,marketState:'OPEN'}};}
+function row(i){const at=start+i*180000,snapshot=F.snapshot(input(at));snapshot.x=snapshot.x.map(()=>0);return{id:'d'+i,symbol:'XAUUSD',at,snapshot,ai:{decision:'WAIT',reason:'UNTRAINED'},safety:{ok:true,reasons:[]},finalDecision:'WAIT',legacySide:'WAIT',positions:{BUY:{side:'BUY',entry:100,sl:99,tp:100.75,risk:1,status:'TP1',r:.73,openedAt:at,closedAt:at+10000,mae:0,mfe:.75},SELL:{side:'SELL',entry:100,sl:101,tp:99.25,risk:1,status:'SL',r:-1.02,openedAt:at,closedAt:at+10000,mae:-1,mfe:0}}};}
+const dataset=(n=100)=>Array.from({length:n},(_,i)=>row(i));
+module.exports={input,row,dataset,start};
